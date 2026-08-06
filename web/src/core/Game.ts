@@ -36,6 +36,9 @@ export class Game {
 
     this.resize()
     window.addEventListener('resize', () => this.resize())
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) this.audio.resume()
+    })
     this.bindInput()
 
     // dev 下挂个调试入口:控制台里 __game.debugTargets() 能看当前哪个是正确答案
@@ -165,6 +168,8 @@ export class Game {
       }
     }
     this.canvas.addEventListener('pointerdown', (e) => {
+      // 从微信别的页面切回来时 context 常常还挂着,借这次点击把它拉起来
+      this.audio.resume()
       const p = pos(e)
       this.play?.onPointerDown(p.x, p.y)
     })
