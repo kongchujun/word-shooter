@@ -47,13 +47,28 @@ jobs:
           cd dist && sha256sum word-shooter-linux-* > checksums.txt
           cat checksums.txt
 
+      - name: 生成版本标记
+        id: ver
+        run: |
+          echo "stamp=$(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M')" >> "$GITHUB_OUTPUT"
+          echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      # 上传资产的 action 不会挪动已存在的 tag。不显式重置的话,Release 页面会一直
+      # 指着第一次构建的那个 commit,明明包换了却看着像没更新。
+      - name: 把 latest 标签移到本次提交
+        run: |
+          git tag -f latest
+          git push -f origin latest
+
       - name: 发布到 latest
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: 最新构建
+          # published_at 只在首次发布时定下来,页面上那个日期永远不动。
+          # 把时间写进标题,才能一眼看出装的是哪一版。
+          name: 最新构建 · ${{ steps.ver.outputs.stamp }} · ${{ steps.ver.outputs.short }}
           body: |
-            `main` 分支 ${{ github.sha }} 的自动构建。
+            `main` 分支 ${{ github.sha }} 的自动构建,打包于 ${{ steps.ver.outputs.stamp }}(UTC+9)。
 
             服务器上执行 `./deploy.sh` 即可更新。
           files: |
