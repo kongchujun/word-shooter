@@ -4,8 +4,14 @@
 
 node_modules/
 build/
+dist/
 web/dist/*
 !web/dist/.gitkeep
+
+# deploy.sh 在服务器上留下的东西
+word-shooter
+word-shooter.pid
+word-shooter.log
 
 # 素材是你自己的图和音频,不进仓库
 assets/images/*

@@ -182,15 +182,46 @@ web/src/
 
 ## 部署
 
+前端已经 `go:embed` 进二进制,**assets 目录不打包** —— 放二进制同目录即可(也能用 `-assets` 指定别的路径)。纯静态无 CGO,服务器上不需要装 Go、Node 或任何运行时。
+
+### 自动:push 到 main 就出包
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) 会在每次 push 到 `main` 时构建前端、交叉编译 linux/amd64 和 linux/arm64,然后覆盖名为 `latest` 的 Release。下载地址是固定的,不用管版本号:
+
+```
+https://github.com/kongchujun/word-shooter/releases/download/latest/word-shooter-linux-amd64
+```
+
+服务器上第一次准备:
+
+```bash
+mkdir -p /opt/word-shooter && cd /opt/word-shooter
+curl -fSLO https://raw.githubusercontent.com/kongchujun/word-shooter/main/deploy.sh
+chmod +x deploy.sh
+# 再从本机把 .env 和 assets/ 传上来(这两样都不在仓库里)
+```
+
+之后每次更新只要一条命令:
+
+```bash
+./deploy.sh              # 默认端口 8091
+PORT=9000 ./deploy.sh    # 换端口
+```
+
+[`deploy.sh`](deploy.sh) 做四件事:按 `uname -m` 挑架构下载、核对 sha256 → 停掉占着端口的旧进程(先 TERM,赖着不走再 KILL)→ 替换二进制 → 启动并轮询 `/api/manifest`,10 秒内没响应就把日志尾巴打出来。
+
+两处是特意防呆的:**下载失败或校验和对不上就直接退出**,不会把正在跑的旧版本弄坏;**端口上蹲着的要不是 word-shooter,脚本会拒绝动手**,免得误杀别的服务。
+
+日志写在 `word-shooter.log`,pid 记在 `word-shooter.pid`,`assets/` 原样不动。
+
+### 手动
+
+不想走 Release 的话,老办法一直有效:
+
 ```bash
 ./build.sh
 scp build/word-shooter-linux-amd64 服务器:/opt/word-shooter/
 scp -r assets 服务器:/opt/word-shooter/
-```
-
-前端已经 `go:embed` 进二进制,**assets 目录不打包**,放二进制同目录即可(也能用 `-assets` 指定路径)。纯静态无 CGO,服务器上不需要装任何东西:
-
-```bash
 ./word-shooter-linux-amd64 -addr :8091
 ```
 

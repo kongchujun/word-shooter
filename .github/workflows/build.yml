@@ -1,0 +1,62 @@
+name: build
+
+# push 到 main 就构建 Linux 二进制,并覆盖名为 latest 的 Release。
+# 服务器上的 deploy.sh 直接从那个固定地址下载,不用管版本号。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # tsc 在这一步会做类型检查,类型错了就不会发出坏包
+      - name: 构建前端
+        run: |
+          npm --prefix web ci
+          npm --prefix web run build
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: go vet
+        run: go vet ./...
+
+      # 纯静态无 CGO,amd64 和 arm64 都出一份,服务器按 uname 自己挑
+      - name: 交叉编译
+        run: |
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+              go build -trimpath -ldflags "-s -w" -o "dist/word-shooter-linux-$arch" .
+          done
+          cd dist && sha256sum word-shooter-linux-* > checksums.txt
+          cat checksums.txt
+
+      - name: 发布到 latest
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: 最新构建
+          body: |
+            `main` 分支 ${{ github.sha }} 的自动构建。
+
+            服务器上执行 `./deploy.sh` 即可更新。
+          files: |
+            dist/word-shooter-linux-amd64
+            dist/word-shooter-linux-arm64
+            dist/checksums.txt
