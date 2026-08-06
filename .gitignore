@@ -1,0 +1,21 @@
+# 密钥和后台密码,绝对不能进仓库
+.env
+.env.local
+
+node_modules/
+build/
+web/dist/*
+!web/dist/.gitkeep
+
+# 素材是你自己的图和音频,不进仓库
+assets/images/*
+assets/audio/*
+assets/sfx/*
+!assets/**/.gitkeep
+# 后台写的生成参数,跟着素材走
+assets/settings.json
+
+# 编辑器
+.idea/
+.claude/
+.DS_Store

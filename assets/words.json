@@ -1,0 +1,54 @@
+{
+  "categories": [
+    {
+      "id": "fruit",
+      "name": "水果",
+      "icon": "🍎",
+      "order": 1
+    },
+    {
+      "id": "animal",
+      "name": "动物",
+      "icon": "🐘",
+      "order": 2
+    }
+  ],
+  "words": {
+    "apple": {
+      "zh": "",
+      "tags": [
+        "fruit"
+      ]
+    },
+    "banana": {
+      "zh": "香蕉",
+      "tags": [
+        "fruit"
+      ]
+    },
+    "lemon": {
+      "zh": "柠檬",
+      "tags": [
+        "fruit"
+      ]
+    },
+    "mango": {
+      "zh": "芒果",
+      "tags": [
+        "fruit"
+      ]
+    },
+    "orange": {
+      "zh": "橘子",
+      "tags": [
+        "fruit"
+      ]
+    },
+    "watermelon": {
+      "zh": "西瓜",
+      "tags": [
+        "fruit"
+      ]
+    }
+  }
+}
