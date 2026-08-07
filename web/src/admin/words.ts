@@ -10,6 +10,9 @@ interface Pending {
   source: 'ai' | 'file'
 }
 
+/** 每页卡片数。太多 DOM 会卡,后台词库长大了必须分页。 */
+const PAGE_SIZE = 24
+
 export function renderWords(root: HTMLElement, state: State, refresh: () => Promise<void>): void {
   const cats = state.data.categories
   const filterOpts = cats
@@ -28,21 +31,30 @@ export function renderWords(root: HTMLElement, state: State, refresh: () => Prom
       <div class="spacer"></div>
       <span class="stat" id="stat"></span>
     </div>
-    <div class="grid" id="grid"></div>`
+    <div class="grid" id="grid"></div>
+    <div class="pager" id="pager" hidden></div>`
 
   const grid = qs<HTMLDivElement>(root, '#grid')
+  const pager = qs<HTMLDivElement>(root, '#pager')
   const search = qs<HTMLInputElement>(root, '#search')
   const filter = qs<HTMLSelectElement>(root, '#filter')
+  let page = 1
 
-  const draw = (): void => {
+  const filtered = (): AdminWord[] => {
     const q = search.value.trim().toLowerCase()
     const f = filter.value
-    const list = state.data.words.filter((w) => {
+    return state.data.words.filter((w) => {
       if (q && !w.id.includes(q) && !w.zh.toLowerCase().includes(q)) return false
       if (f === '__none' && w.tags.length > 0) return false
       if (f && f !== '__none' && !w.tags.includes(f)) return false
       return true
     })
+  }
+
+  const draw = (): void => {
+    const list = filtered()
+    const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
+    if (page > pages) page = pages
 
     const ready = state.data.words.filter(isReady).length
     qs(root, '#stat').textContent =
@@ -50,10 +62,13 @@ export function renderWords(root: HTMLElement, state: State, refresh: () => Prom
 
     if (list.length === 0) {
       grid.innerHTML = `<p class="empty">${state.data.words.length === 0 ? '还没有词。点「加词」开始,或者去「批量生成」一次加一批。' : '没有匹配的词。'}</p>`
+      pager.hidden = true
+      pager.innerHTML = ''
       return
     }
 
-    grid.innerHTML = list.map((w) => card(w, state)).join('')
+    const slice = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    grid.innerHTML = slice.map((w) => card(w, state)).join('')
     for (const el of grid.querySelectorAll<HTMLElement>('[data-edit]')) {
       el.addEventListener('click', () => openEditor(state, refresh, el.dataset.edit!))
     }
@@ -77,12 +92,70 @@ export function renderWords(root: HTMLElement, state: State, refresh: () => Prom
         }
       })
     }
+
+    drawPager(pager, page, pages, list.length, (p) => {
+      page = p
+      draw()
+      // 换页滚回词条区顶部,别让人在旧滚动位置干瞪眼
+      root.scrollIntoView({ block: 'start' })
+    })
   }
 
-  search.addEventListener('input', draw)
-  filter.addEventListener('change', draw)
+  search.addEventListener('input', () => {
+    page = 1
+    draw()
+  })
+  filter.addEventListener('change', () => {
+    page = 1
+    draw()
+  })
   qs(root, '#add').addEventListener('click', () => openEditor(state, refresh, null))
   draw()
+}
+
+function drawPager(
+  el: HTMLElement,
+  page: number,
+  pages: number,
+  total: number,
+  go: (p: number) => void,
+): void {
+  if (pages <= 1) {
+    el.hidden = true
+    el.innerHTML = ''
+    return
+  }
+  el.hidden = false
+
+  // 页码窗口:当前页前后各两页,两端用 …
+  const nums: (number | '…')[] = []
+  const push = (n: number | '…'): void => {
+    if (nums[nums.length - 1] !== n) nums.push(n)
+  }
+  for (let i = 1; i <= pages; i++) {
+    if (i === 1 || i === pages || Math.abs(i - page) <= 2) push(i)
+    else if (nums[nums.length - 1] !== '…') push('…')
+  }
+
+  el.innerHTML = `
+    <button class="btn" data-p="prev" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+    <div class="pager-nums">
+      ${nums
+        .map((n) =>
+          n === '…'
+            ? `<span class="pager-gap">…</span>`
+            : `<button class="pager-num ${n === page ? 'active' : ''}" data-p="${n}">${n}</button>`,
+        )
+        .join('')}
+    </div>
+    <button class="btn" data-p="next" ${page >= pages ? 'disabled' : ''}>下一页</button>
+    <span class="pager-meta">第 ${page} / ${pages} 页 · 本页筛选 ${total} 个</span>`
+
+  el.querySelector('[data-p="prev"]')?.addEventListener('click', () => go(page - 1))
+  el.querySelector('[data-p="next"]')?.addEventListener('click', () => go(page + 1))
+  for (const b of el.querySelectorAll<HTMLElement>('.pager-num')) {
+    b.addEventListener('click', () => go(Number(b.dataset.p)))
+  }
 }
 
 function card(w: AdminWord, state: State): string {

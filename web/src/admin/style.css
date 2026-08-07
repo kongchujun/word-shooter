@@ -288,6 +288,57 @@ main {
   text-align: center;
 }
 
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.pager-nums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pager-num {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.pager-num:hover {
+  border-color: var(--accent);
+}
+
+.pager-num.active {
+  border-color: var(--accent);
+  background: rgba(77, 141, 255, 0.25);
+  color: #fff;
+  font-weight: 600;
+}
+
+.pager-gap {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  color: var(--muted);
+}
+
+.pager-meta {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 /* ---------- 词条卡片 ---------- */
 
 .grid {
