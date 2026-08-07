@@ -1,4 +1,4 @@
-import { api, ApiError, type AdminWord, type GenResult } from './api'
+import { api, ApiError, type AdminWord, type GenResult, type TTSProvider } from './api'
 import { fileToB64, isReady, type State } from './state'
 import { dataURL, escapeHtml, fmtBytes, fmtCost, h, ID_RE, qs, toast, toId } from './ui'
 
@@ -242,10 +242,12 @@ export function openEditor(state: State, refresh: () => Promise<void>, id: strin
             <label>发音</label>
             <div class="asset-preview" id="aud-preview"></div>
             <div class="asset-btns">
-              ${state.me.openrouter ? '<button class="btn" id="gen-aud">✨ AI 生成</button>' : ''}
+              ${state.me.azure ? '<button class="btn" data-gen-aud="azure" title="微软神经网络语音">✨ Azure</button>' : ''}
+              ${state.me.openrouter ? '<button class="btn" data-gen-aud="openrouter" title="OpenRouter TTS">✨ OpenRouter</button>' : ''}
               <button class="btn" id="pick-aud">选文件</button>
               <input type="file" id="file-aud" accept="audio/*" hidden />
             </div>
+            <p class="muted small" id="aud-src"></p>
           </div>
         </div>
         <p class="cost" id="cost"></p>
@@ -285,7 +287,11 @@ export function openEditor(state: State, refresh: () => Promise<void>, id: strin
 
   const wordFor = (): string => en.value.trim() || existing?.id || ''
 
-  const gen = async (kind: 'img' | 'aud', btn: HTMLButtonElement): Promise<void> => {
+  const gen = async (
+    kind: 'img' | 'aud',
+    btn: HTMLButtonElement,
+    provider?: TTSProvider,
+  ): Promise<void> => {
     const word = wordFor()
     if (!word) {
       toast('先填英文单词', 'error')
@@ -300,7 +306,8 @@ export function openEditor(state: State, refresh: () => Promise<void>, id: strin
       btn.textContent = `生成中 ${Math.round((Date.now() - startedAt) / 1000)}s`
     }, 1000)
     try {
-      const r: GenResult = kind === 'img' ? await api.genImage(word) : await api.genAudio(word)
+      const r: GenResult =
+        kind === 'img' ? await api.genImage(word) : await api.genAudio(word, provider)
       const p: Pending = { b64: r.b64, mediaType: r.mediaType, bytes: r.bytes, source: 'ai' }
       if (kind === 'img') {
         img = p
@@ -311,6 +318,8 @@ export function openEditor(state: State, refresh: () => Promise<void>, id: strin
       } else {
         aud = p
         drawAud()
+        // 两个源可以来回试,标出当前听的是哪个生成的
+        qs(overlay, '#aud-src').textContent = `当前:${r.model}`
       }
       spent += r.cost
       drawCost()
@@ -326,9 +335,10 @@ export function openEditor(state: State, refresh: () => Promise<void>, id: strin
   overlay.querySelector('#gen-img')?.addEventListener('click', (e) =>
     gen('img', e.currentTarget as HTMLButtonElement),
   )
-  overlay.querySelector('#gen-aud')?.addEventListener('click', (e) =>
-    gen('aud', e.currentTarget as HTMLButtonElement),
-  )
+  // 每个语音源一个按钮,点哪个走哪个,不改默认设置
+  for (const b of overlay.querySelectorAll<HTMLButtonElement>('[data-gen-aud]')) {
+    b.addEventListener('click', () => gen('aud', b, b.dataset.genAud as TTSProvider))
+  }
 
   const wireFile = (btnSel: string, inputSel: string, kind: 'img' | 'aud'): void => {
     const input = qs<HTMLInputElement>(overlay, inputSel)

@@ -4,6 +4,19 @@ export interface Me {
   username: string
   /** 后端有没有配 OPENROUTER_API_KEY,决定要不要显示 AI 生成按钮 */
   openrouter: boolean
+  /** 有没有配 AZURE_API_KEY —— 决定语音那栏显示几个生成按钮 */
+  azure: boolean
+}
+
+/** 语音来源 */
+export type TTSProvider = 'azure' | 'openrouter'
+
+export interface ProviderInfo {
+  id: TTSProvider
+  name: string
+  available: boolean
+  voice: string
+  note: string
 }
 
 export interface Category {
@@ -31,8 +44,12 @@ export interface Settings {
   imagePrompt: string
   imageModel: string
   imageSize: string
+  /** 默认语音源 */
+  ttsProvider: TTSProvider
   ttsModel: string
   ttsVoice: string
+  /** Azure 音色,和 OpenRouter 的分开存 */
+  azureVoice: string
   ttsSpeed: number
 }
 
@@ -47,6 +64,9 @@ export interface OrModel {
 export interface ModelList {
   image: OrModel[]
   speech: OrModel[]
+  /** Azure 的英语音色 */
+  azure: OrModel[]
+  providers: ProviderInfo[]
   warning?: string
 }
 
@@ -114,8 +134,9 @@ export const api = {
 
   genImage: (word: string, prompt?: string) =>
     json<GenResult>('POST', '/api/admin/generate/image', { word, prompt }),
-  genAudio: (word: string, voice?: string) =>
-    json<GenResult>('POST', '/api/admin/generate/audio', { word, voice }),
+  /** provider 不传就用设置里的默认语音源 */
+  genAudio: (word: string, provider?: TTSProvider, voice?: string) =>
+    json<GenResult>('POST', '/api/admin/generate/audio', { word, provider, voice }),
 
   settings: () => req<Settings>('/api/admin/settings'),
   saveSettings: (s: Partial<Settings>) => json<Settings>('PUT', '/api/admin/settings', s),

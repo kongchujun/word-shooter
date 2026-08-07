@@ -821,3 +821,38 @@ main {
     flex-wrap: wrap;
   }
 }
+
+/* 语音源单选 —— 复用 .check 的胶囊样式 */
+.check.radio:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(77, 141, 255, 0.16);
+}
+
+.check.radio:has(input:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 设置页的试听结果,新的排在上面 */
+#try-out {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.try-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.try-row audio {
+  height: 34px;
+  flex: 1;
+  max-width: 320px;
+}

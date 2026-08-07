@@ -1,4 +1,4 @@
-import { api, ApiError } from './api'
+import { api, ApiError, type TTSProvider } from './api'
 import type { State } from './state'
 import { dataURL, escapeHtml, fmtBytes, fmtCost, ID_RE, qs, toast, toId } from './ui'
 
@@ -36,6 +36,16 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
         <label>加到哪些类别</label>
         <div class="checks">${catChecks || '<span class="muted">还没建类别,可以先去「类别」页建</span>'}</div>
       </div>
+      <div class="field">
+        <label>发音用哪个源</label>
+        <div class="checks" id="tts-provider">
+          <label class="check radio">
+            <input type="radio" name="btts" value="" checked /> 跟随设置(${escapeHtml(state.settings.ttsProvider === 'azure' ? 'Azure' : 'OpenRouter')})
+          </label>
+          ${state.me.azure ? '<label class="check radio"><input type="radio" name="btts" value="azure" /> 🅰️ Azure</label>' : ''}
+          ${state.me.openrouter ? '<label class="check radio"><input type="radio" name="btts" value="openrouter" /> 🌐 OpenRouter</label>' : ''}
+        </div>
+      </div>
       <div class="toolbar">
         <button class="btn primary" id="start">开始生成</button>
         <button class="btn" id="save-all" disabled>全部保存</button>
@@ -50,6 +60,12 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
   const rowsEl = qs<HTMLDivElement>(root, '#rows')
   const startBtn = qs<HTMLButtonElement>(root, '#start')
   const saveBtn = qs<HTMLButtonElement>(root, '#save-all')
+
+  /** 空串 = 跟随设置里的默认语音源 */
+  const pickedProvider = (): TTSProvider | undefined =>
+    (root.querySelector<HTMLInputElement>('input[name="btts"]:checked')?.value || undefined) as
+      | TTSProvider
+      | undefined
 
   const drawStat = (): void => {
     const done = rows.filter((r) => r.status === 'done').length
@@ -121,7 +137,7 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
       r.img = { b64: i.b64, mediaType: i.mediaType, bytes: i.bytes }
       r.cost += i.cost
       draw()
-      const a = await api.genAudio(r.en)
+      const a = await api.genAudio(r.en, pickedProvider())
       r.aud = { b64: a.b64, mediaType: a.mediaType, bytes: a.bytes }
       r.cost += a.cost
       r.status = 'done'

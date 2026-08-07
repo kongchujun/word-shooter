@@ -23,21 +23,37 @@ const (
 	// 不透明带来的方块问题由前端的圆形裁切兜住(见 AssetLoader)。
 	defaultImageModel = "sourceful/riverflow-v2.5-fast"
 	defaultImageSize  = "1024x1024"
-	// Kokoro 便宜、英语清晰,af_bella 是偏温和的美音女声,适合给孩子听
+	// Kokoro 便宜、英语清晰,af_bella 是偏温和的美音女声
 	defaultTTSModel = "hexgrad/kokoro-82m"
 	defaultTTSVoice = "af_bella"
 	defaultTTSSpeed = 0.95
+
+	// Azure 的 Ana 是微软的儿童音色,给孩子听比成人音更亲和
+	defaultAzureVoice = "en-US-AnaNeural"
+	// 两个语音源都留着,默认用 Azure —— 音质明显更稳
+	defaultTTSProvider = ttsAzure
+)
+
+// 语音来源
+const (
+	ttsOpenRouter = "openrouter"
+	ttsAzure      = "azure"
 )
 
 // Settings 是后台可调的生成参数,存在 assets/settings.json,
 // 和素材放一起,scp 部署时一并带走。
 type Settings struct {
-	ImagePrompt string  `json:"imagePrompt"`
-	ImageModel  string  `json:"imageModel"`
-	ImageSize   string  `json:"imageSize"`
-	TTSModel    string  `json:"ttsModel"`
-	TTSVoice    string  `json:"ttsVoice"`
-	TTSSpeed    float64 `json:"ttsSpeed"`
+	ImagePrompt string `json:"imagePrompt"`
+	ImageModel  string `json:"imageModel"`
+	ImageSize   string `json:"imageSize"`
+
+	/** 默认用哪个语音源:openrouter | azure。单个词生成时可以临时指定另一个。 */
+	TTSProvider string `json:"ttsProvider"`
+	TTSModel    string `json:"ttsModel"`
+	TTSVoice    string `json:"ttsVoice"`
+	/** Azure 的音色,和 OpenRouter 的分开存,切来切去不会互相覆盖 */
+	AzureVoice string  `json:"azureVoice"`
+	TTSSpeed   float64 `json:"ttsSpeed"`
 }
 
 var settingsMu sync.Mutex
@@ -53,8 +69,10 @@ func defaultSettings() Settings {
 		ImagePrompt: defaultImagePrompt,
 		ImageModel:  env("OPENROUTER_IMAGE_MODEL"),
 		ImageSize:   env("OPENROUTER_IMAGE_SIZE"),
+		TTSProvider: env("TTS_PROVIDER"),
 		TTSModel:    env("OPENROUTER_TTS_MODEL"),
 		TTSVoice:    env("OPENROUTER_TTS_VOICE"),
+		AzureVoice:  env("AZURE_TTS_VOICE"),
 		TTSSpeed:    defaultTTSSpeed,
 	}
 	return s.withFallbacks()
@@ -76,6 +94,16 @@ func (s Settings) withFallbacks() Settings {
 	}
 	if s.TTSVoice == "" {
 		s.TTSVoice = defaultTTSVoice
+	}
+	if s.AzureVoice == "" {
+		s.AzureVoice = defaultAzureVoice
+	}
+	if s.TTSProvider != ttsOpenRouter && s.TTSProvider != ttsAzure {
+		s.TTSProvider = defaultTTSProvider
+	}
+	// 默认想用 Azure 但没配 key,就退回 OpenRouter,别让生成直接报错
+	if s.TTSProvider == ttsAzure && !azureEnabled() {
+		s.TTSProvider = ttsOpenRouter
 	}
 	if s.TTSSpeed <= 0 {
 		s.TTSSpeed = defaultTTSSpeed

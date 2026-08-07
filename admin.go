@@ -89,6 +89,8 @@ func (s *adminServer) handleGenerateAudio(w http.ResponseWriter, r *http.Request
 	var req struct {
 		Word  string `json:"word"`
 		Voice string `json:"voice"`
+		// 空 = 用设置里的默认语音源;openrouter / azure = 本次临时指定
+		Provider string `json:"provider"`
 	}
 	if err := decodeJSON(w, r, &req, 16<<10); err != nil {
 		jsonError(w, http.StatusBadRequest, err.Error())
@@ -101,13 +103,19 @@ func (s *adminServer) handleGenerateAudio(w http.ResponseWriter, r *http.Request
 	}
 
 	cfg := loadSettings(s.assetsDir)
+	provider := strings.TrimSpace(req.Provider)
+	// 音色写进哪个字段,取决于这次走哪个源 —— 两边的音色名互不通用
 	if v := strings.TrimSpace(req.Voice); v != "" {
-		cfg.TTSVoice = v
+		if provider == ttsAzure || (provider == "" && cfg.TTSProvider == ttsAzure) {
+			cfg.AzureVoice = v
+		} else {
+			cfg.TTSVoice = v
+		}
 	}
 
-	g, err := generateSpeech(r.Context(), cfg, word)
+	g, err := synthesizeSpeech(r.Context(), cfg, word, provider)
 	if err != nil {
-		log.Printf("[admin] 生成语音失败 word=%q: %v", word, err)
+		log.Printf("[admin] 生成语音失败 word=%q provider=%q: %v", word, provider, err)
 		jsonError(w, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -142,7 +150,12 @@ func (s *adminServer) handleSaveSettings(w http.ResponseWriter, r *http.Request)
 // handleModels 列可用的图片模型和 TTS 模型(带音色)。
 // 拉不到不算错误 —— 返回空列表,前端退回手填模型 id。
 func (s *adminServer) handleModels(w http.ResponseWriter, r *http.Request) {
-	out := map[string]any{"image": []orModel{}, "speech": []orModel{}}
+	out := map[string]any{
+		"image":     []orModel{},
+		"speech":    []orModel{},
+		"azure":     []orModel{},
+		"providers": ttsProviders(loadSettings(s.assetsDir)),
+	}
 	var errs []string
 
 	for _, m := range []string{"image", "speech"} {
@@ -153,6 +166,16 @@ func (s *adminServer) handleModels(w http.ResponseWriter, r *http.Request) {
 		}
 		out[m] = models
 	}
+
+	if azureEnabled() {
+		voices, err := listAzureVoices(r.Context())
+		if err != nil {
+			errs = append(errs, err.Error())
+		} else {
+			out["azure"] = voices
+		}
+	}
+
 	if len(errs) > 0 {
 		out["warning"] = strings.Join(errs, "; ")
 	}

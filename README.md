@@ -29,16 +29,17 @@ Vite + TypeScript + Canvas 2D 写的前端,Go 单二进制托管,局域网/公�
 admin=你的用户名
 password=你的密码
 OPENROUTER_API_KEY=sk-or-...
+AZURE_API_KEY=...              # 可选,发音的第二个来源
 ```
 
-`admin` 和 `password` 少一个,整个后台就自动禁用并在启动日志里说明 —— 免得部署到公网上门户大开。`OPENROUTER_API_KEY` 只影响 AI 生成:没配也能进后台管词条,只是不显示生成按钮。
+`admin` 和 `password` 少一个,整个后台就自动禁用并在启动日志里说明 —— 免得部署到公网上门户大开。两个 API key 只影响 AI 生成:没配也能进后台管词条,只是不显示对应的生成按钮。
 
 | 页面 | 能做什么 |
 | --- | --- |
-| **词条** | 卡片列出所有词,标出缺图/缺音的;点开可改中文、换类别、重新生成、删除(连文件一起删) |
+| **词条** | 卡片列出所有词,标出缺图/缺音的;点开可改中文、换类别、删除(连文件一起删);发音可以在两个语音源之间来回试 |
 | **类别** | 增删改排序。类别决定游戏分成哪几关,改了名字游戏选关页跟着变 |
 | **批量生成** | 粘一列单词(`apple 苹果` 这种带中文也行),串行生成图+音,预览后一次性保存 |
-| **设置** | 图片模型、尺寸、prompt 模板、TTS 模型和音色、语速;还能「试生成一张」看效果 |
+| **设置** | 图片模型、尺寸、prompt 模板;默认语音源、两个源各自的音色、语速;「试生成一张」「试听 Azure / OpenRouter」 |
 
 **生成的东西不会立刻落盘** —— 先在页面上预览(图看得到、音听得到),点保存才写进 `assets`。重生成多少次都不会留垃圾文件,每次也会显示 OpenRouter 报的实际花费。
 
@@ -58,16 +59,34 @@ OPENROUTER_API_KEY=sk-or-...
 
 设置页的模型下拉会把真正支持透明底的用 `✓` 标出来并排在最前面。判断依据是 `background` 和 `output_format` 两个字段一起看 —— fast 虽然声明支持 `transparent`,但它只出 jpeg,而 **jpeg 和透明底不能共存**(Sourceful 会直接回 422),所以不算数。
 
-发音默认 `hexgrad/kokoro-82m` + `af_bella`(温和的美音女声),出来的是 64kbps 单声道 mp3,约 1 秒 4KB。
-
 生成一张图通常要十几到几十秒,后台按钮上会实时跳秒数,服务端日志也会打印耗时和实际花费。批量生成是串行的,10 个词就是 10 倍时间。
 
-想换模型可以直接在 `.env` 里写,不用进后台:
+### 发音:两个语音源并存
+
+| 源 | 默认音色 | 说明 |
+| --- | --- | --- |
+| **Azure 语音**(默认) | `en-US-AnaNeural` | 微软的**儿童音色**,音质稳。按字符计费,单次不报价 |
+| **OpenRouter** | `hexgrad/kokoro-82m` + `af_bella` | 温和的美音女声,便宜 |
+
+两个源**同时保留**,互不覆盖:
+
+- **词条编辑页**语音那栏有两个按钮(`✨ Azure` / `✨ OpenRouter`),想听哪个点哪个,反复换着生成直到满意再保存,预览下面会标出当前听的是哪个源
+- **设置页**选默认源,批量生成走它;两边的音色分开存(`azureVoice` / `ttsVoice`),来回切不会互相冲掉。设置页还有「试听 Azure」「试听 OpenRouter」两个按钮,用下拉里当前选的音色直接出声,不用先保存
+- **批量页**可以本次单独指定源,也可以「跟随设置」
+
+Azure 出来的是 24kHz 单声道 48kbps mp3,一个单词约 10KB / 1.8 秒;OpenRouter 约 6KB / 1.4 秒。两边都受设置里的「语速」控制(Azure 转成 SSML 的 `prosody rate` 百分比)。
+
+**Azure 的区域**:端点是按区域走的,区域不对一律 401。默认 `eastasia`,要改就在 `.env` 里加 `AZURE_SPEECH_REGION=你的区域`。
+
+想换模型/音色也可以直接写 `.env`,不用进后台:
 
 ```
 OPENROUTER_IMAGE_MODEL=...
 OPENROUTER_TTS_MODEL=...
 OPENROUTER_TTS_VOICE=...
+AZURE_SPEECH_REGION=eastasia
+AZURE_TTS_VOICE=en-US-AnaNeural
+TTS_PROVIDER=azure           # azure | openrouter
 ```
 
 ---
@@ -155,7 +174,9 @@ main.go        静态服务 + 路由 + dotfile 防护
 manifest.go    扫描素材生成词库,读写 words.json
 admin.go       后台 API(类别/词条 CRUD、生成、设置)
 auth.go        无数据库的 session 鉴权 + 登录限流
-openrouter.go  图片和语音生成,按模型支持的参数构造请求
+openrouter.go  图片和 OpenRouter 语音,按模型支持的参数构造请求
+azure.go       Azure 语音(SSML 合成 + 英语音色列表)
+tts.go         两个语音源的分发
 settings.go    assets/settings.json 读写
 env.go         .env 加载
 

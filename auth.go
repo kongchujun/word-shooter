@@ -191,7 +191,9 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 		"enabled":    adminEnabled(),
 		"loggedIn":   adminEnabled() && loggedIn(r),
 		"username":   user,
-		"openrouter": env("OPENROUTER_API_KEY") != "",
+		"openrouter": openRouterKey() != "",
+		// 有没有 Azure 决定后台显示几个语音生成按钮
+		"azure": azureEnabled(),
 	})
 }
 
