@@ -15,7 +15,8 @@ export class Game {
   private play: PlayScene | null = null
   private levels: LevelDef[] = []
   private words: Word[] = []
-  private loaded = false
+  /** 词库清单已就绪(菜单能出)。图片按关加载,不挡选关。 */
+  private ready = false
 
   /** 真正开打/收工时通知外壳,用来收放侧栏 */
   onPlaying: (playing: boolean) => void = () => {}
@@ -63,22 +64,25 @@ export class Game {
   }
 
   /**
-   * 进入单词区。素材加载只做一次 —— 只玩数学的人不用等这一遭。
+   * 进入单词区。只拉词库清单就出菜单 —— 图按关现加载,
+   * 整库在后台慢慢预热,别让几百张图堵住选关。
    */
   async enter(): Promise<void> {
-    if (this.loaded) {
+    if (this.ready) {
       this.showMenu()
       return
     }
-    this.loaded = true
 
-    this.screens.showLoading()
+    this.screens.showLoading('正在读取词库…')
     const manifest = await this.loader.loadManifest()
     this.words = manifest.words
     this.audio.setSfx(manifest.sfx)
-    await this.loader.preloadImages(this.words, (d, t) => this.screens.setProgress(d, t))
     this.levels = buildLevels(this.words, manifest.categories ?? [])
+    this.ready = true
     this.showMenu()
+
+    // 不 await:用户可以先选关,后台顺便把别的图也暖上
+    void this.loader.ensureImages(this.words)
   }
 
   /** 切到别的功能页时收起自己的界面。背景循环留着,各页共用。 */
@@ -95,22 +99,47 @@ export class Game {
   }
 
   private assetNote(): string {
-    const missing = this.loader.placeholderCount
+    const noFile = this.words.filter((w) => !w.image).length
+    const failed = this.loader.placeholderCount
+    const missing = Math.max(noFile, failed)
     if (missing === this.words.length) {
       return '现在用的是内置占位素材(emoji 图 + 浏览器发音)。把 <code>apple.webp</code> 和 <code>apple.mp3</code> 丢进 assets/images 和 assets/audio,刷新页面就会自动换成你的图和真人发音。'
     }
     if (missing > 0) {
-      return `共 ${this.words.length} 个词,其中 ${missing} 个还缺图片,暂时用占位图顶着。`
+      return `共 ${this.words.length} 个词,其中约 ${missing} 个还缺图片,暂时用占位图顶着。`
     }
-    return `共 ${this.words.length} 个词,素材已全部就位。`
+    return `共 ${this.words.length} 个词。选关后只加载这一关的图和声音,不用等整库。`
   }
 
   private async startLevel(level: LevelDef): Promise<void> {
     // 必须在点击的同步调用栈里解锁,否则 iOS 全程没声音
     this.audio.unlock()
 
-    this.screens.showLoading('正在准备这一关的声音…')
-    await this.audio.preload(level.words, (d, t) => this.screens.setProgress(d, t))
+    this.screens.showLoading('正在准备这一关…')
+
+    // 图和声并行;图只补本关还没缓存的
+    let imgDone = 0
+    let imgTotal = level.words.length
+    let audDone = 0
+    let audTotal = 0
+    const tick = (label: string): void => {
+      const total = imgTotal + Math.max(audTotal, 1)
+      this.screens.setProgress(imgDone + audDone, total, label)
+    }
+
+    await Promise.all([
+      this.loader.ensureImages(level.words, (d, t) => {
+        imgDone = d
+        imgTotal = t
+        tick('正在加载图片…')
+      }),
+      this.audio.preload(level.words, (d, t) => {
+        audDone = d
+        audTotal = t
+        tick('正在准备声音…')
+      }),
+    ])
+
     this.screens.hideAll()
 
     this.hud.setScore(0)

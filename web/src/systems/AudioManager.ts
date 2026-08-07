@@ -97,11 +97,22 @@ export class AudioManager {
     const all = [...urls, ...Object.values(this.sfxUrls)]
     this.ttsCount = words.length - urls.length
 
-    let done = 0
-    for (const url of all) {
-      await this.loadBuffer(url)
-      onProgress?.(++done, all.length)
+    if (all.length === 0) {
+      onProgress?.(0, 0)
+      return
     }
+
+    let done = 0
+    let cursor = 0
+    const workers = Array.from({ length: Math.min(6, all.length) }, async () => {
+      while (cursor < all.length) {
+        const url = all[cursor++]
+        await this.loadBuffer(url)
+        done++
+        onProgress?.(done, all.length)
+      }
+    })
+    await Promise.all(workers)
   }
 
   /** 播一个单词的发音。onEnd 在声音结束时回调(用来起反应计时) */

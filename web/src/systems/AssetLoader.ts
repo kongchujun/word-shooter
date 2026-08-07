@@ -4,11 +4,15 @@ import { hashHue } from '../utils/math'
 
 /** 占位靶子的绘制尺寸,足够 retina 上放大也不糊 */
 const PLACEHOLDER_SIZE = 256
+/** 同时解码几张图。太多会把手机 CPU/带宽打满,太少又回到排队慢。 */
+const IMAGE_CONCURRENCY = 8
 
 export class AssetLoader {
   private sprites = new Map<string, Sprite>()
-  /** 有多少个词是拿占位图顶上的,菜单里提示一下 */
-  placeholderCount = 0
+  /** 正在加载的词,避免选关和后台预热抢同一张图解两次 */
+  private inflight = new Map<string, Promise<void>>()
+  /** 用占位图顶上的词 id */
+  private placeholders = new Set<string>()
 
   /**
    * 优先用后端扫描出来的词库;后端没起或返回空就退回内置 emoji 词库,
@@ -28,27 +32,72 @@ export class AssetLoader {
     return { words: FALLBACK_WORDS }
   }
 
-  /** 逐个解码图片,失败的词自动换成占位图,不让一张坏图卡住整局 */
-  async preloadImages(words: Word[], onProgress?: (done: number, total: number) => void): Promise<void> {
-    this.placeholderCount = 0
-    let done = 0
-    for (const w of words) {
-      let sprite: Sprite | null = null
-      if (w.image) {
-        sprite = await this.decodeImage(w.image)
-        if (!sprite) console.warn(`[assets] 图片加载失败,用占位图代替: ${w.image}`)
-      }
-      if (!sprite) {
-        sprite = makePlaceholder(w)
-        this.placeholderCount++
-      }
-      this.sprites.set(w.id, sprite)
-      onProgress?.(++done, words.length)
+  /** 已经加载过、且是占位图的词有多少(菜单提示用) */
+  get placeholderCount(): number {
+    return this.placeholders.size
+  }
+
+  has(wordId: string): boolean {
+    return this.sprites.has(wordId)
+  }
+
+  /**
+   * 只补还没缓存的图。并行有上限,同一词不会解两次。
+   * 选关后只喂这一关的词会很快;后台预热整库也不挡菜单。
+   */
+  async ensureImages(words: Word[], onProgress?: (done: number, total: number) => void): Promise<void> {
+    const total = words.length
+    if (total === 0) {
+      onProgress?.(0, 0)
+      return
     }
+
+    let done = words.filter((w) => this.sprites.has(w.id)).length
+    onProgress?.(done, total)
+
+    const pending = words.filter((w) => !this.sprites.has(w.id))
+    if (pending.length === 0) return
+
+    let cursor = 0
+    const workers = Array.from({ length: Math.min(IMAGE_CONCURRENCY, pending.length) }, async () => {
+      while (cursor < pending.length) {
+        const w = pending[cursor++]
+        await this.loadOne(w)
+        done++
+        onProgress?.(done, total)
+      }
+    })
+    await Promise.all(workers)
   }
 
   get(wordId: string): Sprite | undefined {
     return this.sprites.get(wordId)
+  }
+
+  private loadOne(word: Word): Promise<void> {
+    const hit = this.inflight.get(word.id)
+    if (hit) return hit
+    if (this.sprites.has(word.id)) return Promise.resolve()
+
+    const job = (async () => {
+      let sprite: Sprite | null = null
+      if (word.image) {
+        sprite = await this.decodeImage(word.image)
+        if (!sprite) console.warn(`[assets] 图片加载失败,用占位图代替: ${word.image}`)
+      }
+      if (!sprite) {
+        sprite = makePlaceholder(word)
+        this.placeholders.add(word.id)
+      } else {
+        this.placeholders.delete(word.id)
+      }
+      this.sprites.set(word.id, sprite)
+    })().finally(() => {
+      this.inflight.delete(word.id)
+    })
+
+    this.inflight.set(word.id, job)
+    return job
   }
 
   private async decodeImage(url: string): Promise<Sprite | null> {
