@@ -167,8 +167,14 @@ func listAzureVoices(ctx context.Context) ([]orModel, error) {
 			continue
 		}
 		label := fmt.Sprintf("%s · %s %s", v.ShortName, v.Locale, genderCN(v.Gender))
-		if v.ShortName == defaultAzureVoice {
-			label += "(儿童音,推荐)"
+		switch {
+		case v.ShortName == defaultAzureVoice:
+			label += "(推荐)"
+		case strings.Contains(v.ShortName, "Multilingual"):
+			// 这一代听感明显更接近真人,标出来省得在 149 个里瞎试
+			label += "(更自然)"
+		case v.ShortName == "en-US-AnaNeural":
+			label += "(小女孩音)"
 		}
 		out = append(out, orModel{ID: v.ShortName, Name: label})
 	}

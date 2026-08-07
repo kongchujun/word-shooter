@@ -65,7 +65,7 @@ AZURE_API_KEY=...              # 可选,发音的第二个来源
 
 | 源 | 默认音色 | 说明 |
 | --- | --- | --- |
-| **Azure 语音**(默认) | `en-US-AnaNeural` | 微软的**儿童音色**,音质稳。按字符计费,单次不报价 |
+| **Azure 语音**(默认) | `en-US-AvaMultilingualNeural` | 成人美音女声,`Multilingual` 这一代比经典 Neural 明显更像真人。按字符计费,单次不报价 |
 | **OpenRouter** | `hexgrad/kokoro-82m` + `af_bella` | 温和的美音女声,便宜 |
 
 两个源**同时保留**,互不覆盖:
@@ -74,7 +74,11 @@ AZURE_API_KEY=...              # 可选,发音的第二个来源
 - **设置页**选默认源,批量生成走它;两边的音色分开存(`azureVoice` / `ttsVoice`),来回切不会互相冲掉。设置页还有「试听 Azure」「试听 OpenRouter」两个按钮,用下拉里当前选的音色直接出声,不用先保存
 - **批量页**可以本次单独指定源,也可以「跟随设置」
 
-Azure 出来的是 24kHz 单声道 48kbps mp3,一个单词约 10KB / 1.8 秒;OpenRouter 约 6KB / 1.4 秒。两边都受设置里的「语速」控制(Azure 转成 SSML 的 `prosody rate` 百分比)。
+Azure 出来的是 24kHz 单声道 48kbps mp3,一个单词约 6–10KB / 1.1–1.8 秒;OpenRouter 约 6KB / 1.4 秒。
+
+成人美音女声里 `Ava` / `Emma`(Multilingual)最接近真人,`Jenny` 温和、`Aria` 偏正式、`Michelle` 居中;
+`en-US-AnaNeural` 是**小女孩**的音色 —— 当发音示范不合适,别选。设置页的下拉里 149 个英语音色都能挑,
+旁边「试听 Azure」直接出声,不用先保存。两边都受设置里的「语速」控制(Azure 转成 SSML 的 `prosody rate` 百分比)。
 
 **Azure 的区域**:端点是按区域走的,区域不对一律 401。默认 `eastasia`,要改就在 `.env` 里加 `AZURE_SPEECH_REGION=你的区域`。
 
@@ -85,7 +89,7 @@ OPENROUTER_IMAGE_MODEL=...
 OPENROUTER_TTS_MODEL=...
 OPENROUTER_TTS_VOICE=...
 AZURE_SPEECH_REGION=eastasia
-AZURE_TTS_VOICE=en-US-AnaNeural
+AZURE_TTS_VOICE=en-US-AvaMultilingualNeural
 TTS_PROVIDER=azure           # azure | openrouter
 ```
 

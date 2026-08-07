@@ -37,7 +37,7 @@ export function renderSettings(root: HTMLElement, state: State, refresh: () => P
       </div>
 
       <div class="field" ${state.me.azure ? '' : 'hidden'}>
-        <label>Azure 音色 <span class="muted">en-US-AnaNeural 是儿童音</span></label>
+        <label>Azure 音色 <span class="muted">Ava / Emma 这类 Multilingual 最像真人;AnaNeural 是小女孩音,别当发音示范</span></label>
         <select id="azure-voice"><option value="${escapeHtml(s.azureVoice)}">${escapeHtml(s.azureVoice)}(当前)</option></select>
       </div>
 

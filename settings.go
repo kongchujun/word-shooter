@@ -28,8 +28,9 @@ const (
 	defaultTTSVoice = "af_bella"
 	defaultTTSSpeed = 0.95
 
-	// Azure 的 Ana 是微软的儿童音色,给孩子听比成人音更亲和
-	defaultAzureVoice = "en-US-AnaNeural"
+	// 成人美音女声。Multilingual 这一代比经典 Neural 明显更像真人,
+	// 不用 AnaNeural —— 那个是小女孩的音色,不适合给孩子当发音示范。
+	defaultAzureVoice = "en-US-AvaMultilingualNeural"
 	// 两个语音源都留着,默认用 Azure —— 音质明显更稳
 	defaultTTSProvider = ttsAzure
 )
