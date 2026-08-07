@@ -7,13 +7,32 @@ export interface State {
   /** 模型列表要联网拉,慢且可能失败,按需加载 */
   models: ModelList | null
   tab: Tab
+  /**
+   * 词条页的浏览状态。必须存在这里而不是 renderWords 的局部变量 ——
+   * 保存词条后会整页重绘,局部变量会连人带页跳回第一页,搜索和筛选也一起清掉。
+   */
+  words: WordsView
+}
+
+export interface WordsView {
+  page: number
+  search: string
+  /** 类别 id;'' = 全部,'__none' = 未分类 */
+  filter: string
 }
 
 export type Tab = 'words' | 'categories' | 'batch' | 'settings'
 
 export async function loadState(me: Me): Promise<State> {
   const [data, settings] = await Promise.all([api.data(), api.settings()])
-  return { me, data, settings, models: null, tab: 'words' }
+  return {
+    me,
+    data,
+    settings,
+    models: null,
+    tab: 'words',
+    words: { page: 1, search: '', filter: '' },
+  }
 }
 
 /** 类别 id → 显示名,给不出名字就退回 id */

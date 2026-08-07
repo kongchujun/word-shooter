@@ -15,17 +15,23 @@ const PAGE_SIZE = 24
 
 export function renderWords(root: HTMLElement, state: State, refresh: () => Promise<void>): void {
   const cats = state.data.categories
+  // 从 state 里恢复上次的浏览位置 —— 保存词条会整页重绘,不恢复就跳回第一页
+  const view = state.words
+  const sel = (v: string): string => (view.filter === v ? ' selected' : '')
   const filterOpts = cats
-    .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.icon)} ${escapeHtml(c.name)}</option>`)
+    .map(
+      (c) =>
+        `<option value="${escapeHtml(c.id)}"${sel(c.id)}>${escapeHtml(c.icon)} ${escapeHtml(c.name)}</option>`,
+    )
     .join('')
 
   root.innerHTML = `
     <div class="toolbar">
       <button class="btn primary" id="add">+ 加词</button>
-      <input id="search" class="search" placeholder="搜单词或中文…" />
+      <input id="search" class="search" placeholder="搜单词或中文…" value="${escapeHtml(view.search)}" />
       <select id="filter" class="search" style="max-width:160px">
-        <option value="">全部类别</option>
-        <option value="__none">未分类</option>
+        <option value=""${sel('')}>全部类别</option>
+        <option value="__none"${sel('__none')}>未分类</option>
         ${filterOpts}
       </select>
       <div class="spacer"></div>
@@ -38,11 +44,10 @@ export function renderWords(root: HTMLElement, state: State, refresh: () => Prom
   const pager = qs<HTMLDivElement>(root, '#pager')
   const search = qs<HTMLInputElement>(root, '#search')
   const filter = qs<HTMLSelectElement>(root, '#filter')
-  let page = 1
 
   const filtered = (): AdminWord[] => {
-    const q = search.value.trim().toLowerCase()
-    const f = filter.value
+    const q = view.search.trim().toLowerCase()
+    const f = view.filter
     return state.data.words.filter((w) => {
       if (q && !w.id.includes(q) && !w.zh.toLowerCase().includes(q)) return false
       if (f === '__none' && w.tags.length > 0) return false
@@ -54,7 +59,9 @@ export function renderWords(root: HTMLElement, state: State, refresh: () => Prom
   const draw = (): void => {
     const list = filtered()
     const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
-    if (page > pages) page = pages
+    // 删词后最后一页可能空了,往回收一页
+    if (view.page > pages) view.page = pages
+    if (view.page < 1) view.page = 1
 
     const ready = state.data.words.filter(isReady).length
     qs(root, '#stat').textContent =
@@ -67,7 +74,7 @@ export function renderWords(root: HTMLElement, state: State, refresh: () => Prom
       return
     }
 
-    const slice = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    const slice = list.slice((view.page - 1) * PAGE_SIZE, view.page * PAGE_SIZE)
     grid.innerHTML = slice.map((w) => card(w, state)).join('')
     for (const el of grid.querySelectorAll<HTMLElement>('[data-edit]')) {
       el.addEventListener('click', () => openEditor(state, refresh, el.dataset.edit!))
@@ -93,20 +100,23 @@ export function renderWords(root: HTMLElement, state: State, refresh: () => Prom
       })
     }
 
-    drawPager(pager, page, pages, list.length, (p) => {
-      page = p
+    drawPager(pager, view.page, pages, list.length, (p) => {
+      view.page = p
       draw()
       // 换页滚回词条区顶部,别让人在旧滚动位置干瞪眼
       root.scrollIntoView({ block: 'start' })
     })
   }
 
+  // 改搜索/筛选时回到第一页 —— 结果集变了,停在第 5 页多半是空的
   search.addEventListener('input', () => {
-    page = 1
+    view.search = search.value
+    view.page = 1
     draw()
   })
   filter.addEventListener('change', () => {
-    page = 1
+    view.filter = filter.value
+    view.page = 1
     draw()
   })
   qs(root, '#add').addEventListener('click', () => openEditor(state, refresh, null))
