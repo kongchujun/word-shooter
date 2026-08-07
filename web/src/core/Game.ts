@@ -1,32 +1,27 @@
 import { buildLevels } from '../config/levels'
-import { Background } from '../render/Background'
 import { PlayScene } from '../scenes/PlayScene'
 import { AssetLoader } from '../systems/AssetLoader'
-import { AudioManager } from '../systems/AudioManager'
+import type { AudioManager } from '../systems/AudioManager'
 import { HUD } from '../ui/HUD'
 import { Screens } from '../ui/Screens'
 import type { LevelDef, LevelResult, Word } from '../types'
+import type { Engine } from './Engine'
 
 export class Game {
-  width = 800
-  height = 600
-
-  readonly audio = new AudioManager()
   readonly loader = new AssetLoader()
   readonly hud: HUD
 
   private screens: Screens
-  private menuBg = new Background()
   private play: PlayScene | null = null
   private levels: LevelDef[] = []
   private words: Word[] = []
-  private lastTime = 0
-  /** 帧内异常计数,只打前几条,避免 60fps 刷爆控制台 */
-  private frameErrors = 0
+  private loaded = false
+
+  /** 真正开打/收工时通知外壳,用来收放侧栏 */
+  onPlaying: (playing: boolean) => void = () => {}
 
   constructor(
-    readonly canvas: HTMLCanvasElement,
-    private ctx: CanvasRenderingContext2D,
+    private engine: Engine,
     ui: HTMLElement,
   ) {
     this.hud = new HUD(ui)
@@ -34,15 +29,32 @@ export class Game {
     this.hud.onReplay = () => this.play?.replayAudio()
     this.hud.onQuit = () => this.quitToMenu()
 
-    this.resize()
-    window.addEventListener('resize', () => this.resize())
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) this.audio.resume()
+    window.addEventListener('keydown', (e) => {
+      // 数学游戏也在同一块 canvas 上跑,只认自己的场景在台上的时候
+      if (!this.play || this.engine.active !== this.play) return
+      if (e.code === 'Space') {
+        e.preventDefault()
+        this.play.replayAudio()
+      } else if (e.code === 'Escape') {
+        this.quitToMenu()
+      }
     })
-    this.bindInput()
 
     // dev 下挂个调试入口:控制台里 __game.debugTargets() 能看当前哪个是正确答案
     if (import.meta.env.DEV) (window as unknown as { __game: Game }).__game = this
+  }
+
+  // PlayScene 只认 game.width / game.audio 这几个口子,转发一下就不用改它
+  get width(): number {
+    return this.engine.width
+  }
+
+  get height(): number {
+    return this.engine.height
+  }
+
+  get audio(): AudioManager {
+    return this.engine.audio
   }
 
   /** 仅调试用:列出当前回合的靶子位置和正确答案 */
@@ -50,8 +62,16 @@ export class Game {
     return this.play?.debugTargets() ?? []
   }
 
-  async start(): Promise<void> {
-    requestAnimationFrame((t) => this.frame(t))
+  /**
+   * 进入单词区。素材加载只做一次 —— 只玩数学的人不用等这一遭。
+   */
+  async enter(): Promise<void> {
+    if (this.loaded) {
+      this.showMenu()
+      return
+    }
+    this.loaded = true
+
     this.screens.showLoading()
     const manifest = await this.loader.loadManifest()
     this.words = manifest.words
@@ -59,6 +79,13 @@ export class Game {
     await this.loader.preloadImages(this.words, (d, t) => this.screens.setProgress(d, t))
     this.levels = buildLevels(this.words, manifest.categories ?? [])
     this.showMenu()
+  }
+
+  /** 切到别的功能页时收起自己的界面。背景循环留着,各页共用。 */
+  leave(): void {
+    this.teardownPlay()
+    this.screens.hideAll()
+    this.hud.hide()
   }
 
   // ---------- 流程 ----------
@@ -89,10 +116,11 @@ export class Game {
     this.hud.setScore(0)
     this.hud.setCombo(0)
     this.hud.show()
-    this.canvas.classList.add('aiming')
 
     this.play = new PlayScene(this, level, (r) => this.finishLevel(r))
+    this.engine.setScene(this.play)
     this.play.enter()
+    this.onPlaying(true)
   }
 
   private finishLevel(result: LevelResult): void {
@@ -110,84 +138,10 @@ export class Game {
   }
 
   private teardownPlay(): void {
-    this.play?.exit()
+    const wasPlaying = this.play !== null
+    this.engine.clearScene(this.play)
     this.play = null
     this.hud.hide()
-    this.canvas.classList.remove('aiming')
-  }
-
-  // ---------- 画布 ----------
-
-  private resize(): void {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
-    this.width = window.innerWidth
-    this.height = window.innerHeight
-    this.canvas.width = this.width * dpr
-    this.canvas.height = this.height * dpr
-    this.canvas.style.width = `${this.width}px`
-    this.canvas.style.height = `${this.height}px`
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    this.menuBg.resize(this.width, this.height)
-    this.play?.onResize(this.width, this.height)
-  }
-
-  private frame(now: number): void {
-    // 先排下一帧。放在最后的话,这一帧只要抛一次异常整条 rAF 链就断了,画面永久冻住。
-    requestAnimationFrame((t) => this.frame(t))
-
-    const dt = this.lastTime ? Math.min((now - this.lastTime) / 1000, 1 / 20) : 1 / 60
-    this.lastTime = now
-
-    try {
-      const play = this.play
-      if (play) {
-        play.update(dt)
-        // update 里可能打完最后一轮 → finishLevel() 把 this.play 置空,
-        // 这时别再画已经退场的场景,直接落到下面画菜单背景。
-        if (this.play === play) {
-          play.draw(this.ctx)
-          return
-        }
-      }
-      // 菜单/结算时 canvas 也别是空的
-      this.menuBg.update(dt)
-      this.menuBg.draw(this.ctx)
-    } catch (err) {
-      if (this.frameErrors++ < 10) console.error('[frame] 这一帧出错,已跳过', err)
-    }
-  }
-
-  // ---------- 输入 ----------
-
-  private bindInput(): void {
-    const pos = (e: PointerEvent) => {
-      const r = this.canvas.getBoundingClientRect()
-      return {
-        x: ((e.clientX - r.left) / r.width) * this.width,
-        y: ((e.clientY - r.top) / r.height) * this.height,
-      }
-    }
-    this.canvas.addEventListener('pointerdown', (e) => {
-      // 从微信别的页面切回来时 context 常常还挂着,借这次点击把它拉起来
-      this.audio.resume()
-      const p = pos(e)
-      this.play?.onPointerDown(p.x, p.y)
-    })
-    this.canvas.addEventListener('pointermove', (e) => {
-      const p = pos(e)
-      this.play?.onPointerMove(p.x, p.y)
-    })
-    // 触屏上别触发长按选中/滚动
-    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault())
-
-    window.addEventListener('keydown', (e) => {
-      if (!this.play) return
-      if (e.code === 'Space') {
-        e.preventDefault()
-        this.play.replayAudio()
-      } else if (e.code === 'Escape') {
-        this.quitToMenu()
-      }
-    })
+    if (wasPlaying) this.onPlaying(false)
   }
 }

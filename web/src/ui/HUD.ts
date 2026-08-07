@@ -4,6 +4,7 @@ export class HUD {
   private scoreEl: HTMLSpanElement
   private comboEl: HTMLDivElement
   private roundEl: HTMLSpanElement
+  private replayEl: HTMLButtonElement
 
   onReplay: () => void = () => {}
   onQuit: () => void = () => {}
@@ -23,9 +24,15 @@ export class HUD {
     this.scoreEl = this.root.querySelector('[data-el="score"]')!
     this.roundEl = this.root.querySelector('[data-el="round"]')!
     this.comboEl = this.root.querySelector('[data-el="combo"]')!
+    this.replayEl = this.root.querySelector('[data-act="replay"]')!
 
-    this.root.querySelector('[data-act="replay"]')!.addEventListener('click', () => this.onReplay())
+    this.replayEl.addEventListener('click', () => this.onReplay())
     this.root.querySelector('[data-act="quit"]')!.addEventListener('click', () => this.onQuit())
+  }
+
+  /** 数学题没有语音可重听,把喇叭收掉 */
+  setReplayVisible(v: boolean): void {
+    this.replayEl.classList.toggle('hidden', !v)
   }
 
   show(): void {

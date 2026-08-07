@@ -1,10 +1,11 @@
 import { BALANCE } from '../config/balance'
-import type { Sprite, Word } from '../types'
+import type { Sprite } from '../types'
 import { clamp, easeOutBack, rand } from '../utils/math'
 
 type State = 'entering' | 'alive' | 'dying'
 
-export class Target {
+/** 靶子只管画和动,挂着什么内容(单词、数字)由 T 决定 */
+export class Target<T> {
   x: number
   y: number
   state: State = 'entering'
@@ -22,7 +23,7 @@ export class Target {
   private growOnDeath = true
 
   constructor(
-    readonly word: Word,
+    readonly item: T,
     readonly sprite: Sprite,
     readonly isCorrect: boolean,
     /** 落位点,窗口尺寸变了会被 relocate 改写 */

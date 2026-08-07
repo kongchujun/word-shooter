@@ -5,15 +5,10 @@ import { ParticleSystem } from '../entities/Particle'
 import { Target } from '../entities/Target'
 import { Background } from '../render/Background'
 import type { LevelDef, LevelResult, RoundRecord, Word } from '../types'
-import { clamp, hashHue, rand, shuffle } from '../utils/math'
+import { gridSlots } from '../utils/layout'
+import { clamp, hashHue, shuffle } from '../utils/math'
 
 type Phase = 'spawning' | 'listening' | 'feedback'
-
-interface Slot {
-  x: number
-  y: number
-  r: number
-}
 
 /**
  * 一轮 = 生成靶子 → 播语音 → 等玩家开枪 → 反馈。
@@ -23,7 +18,7 @@ export class PlayScene {
   private bg = new Background()
   private particles = new ParticleSystem()
   private crosshair = new Crosshair()
-  private targets: Target[] = []
+  private targets: Target<Word>[] = []
 
   private queue: Word[] = []
   private records: RoundRecord[] = []
@@ -74,7 +69,7 @@ export class PlayScene {
 
   /** 仅调试用 */
   debugTargets(): { en: string; x: number; y: number; correct: boolean }[] {
-    return this.targets.map((t) => ({ en: t.word.en, x: Math.round(t.x), y: Math.round(t.y), correct: t.isCorrect }))
+    return this.targets.map((t) => ({ en: t.item.en, x: Math.round(t.x), y: Math.round(t.y), correct: t.isCorrect }))
   }
 
   /** HUD 上的 🔊 按钮 */
@@ -115,35 +110,9 @@ export class PlayScene {
     this.game.hud.setRound(this.roundIndex + 1, this.level.rounds)
   }
 
-  /** 网格分格 + 小幅抖动,保证靶子不重叠 */
-  private layout(n: number): Slot[] {
-    const w = this.game.width
-    const h = this.game.height
-    const top = 96 // 给顶部 HUD 让位
-    const bottom = 32
-    const areaH = Math.max(120, h - top - bottom)
-
-    const cols = Math.max(1, Math.min(n, Math.round(Math.sqrt((n * w) / areaH)) || 1))
-    const rows = Math.ceil(n / cols)
-    const cellW = w / cols
-    const cellH = areaH / rows
-    const r = clamp(Math.min(cellW, cellH) * 0.34, BALANCE.targetRadiusMin, BALANCE.targetRadiusMax)
-
-    const slots: Slot[] = []
-    for (let i = 0; i < n; i++) {
-      const row = Math.floor(i / cols)
-      const col = i % cols
-      const inRow = Math.min(cols, n - row * cols)
-      const offset = (w - inRow * cellW) / 2
-      const jx = rand(-cellW * 0.08, cellW * 0.08)
-      const jy = rand(-cellH * 0.1, cellH * 0.1)
-      slots.push({
-        x: clamp(offset + (col + 0.5) * cellW + jx, r + 8, w - r - 8),
-        y: clamp(top + (row + 0.5) * cellH + jy, top + r * 0.6, h - bottom - r * 0.6),
-        r,
-      })
-    }
-    return slots
+  /** 顶上 96 给 HUD 让位,底下留一点边 */
+  private layout(n: number) {
+    return gridSlots(n, this.game.width, this.game.height, 96, 32)
   }
 
   private nextRound(): void {
@@ -168,7 +137,7 @@ export class PlayScene {
     if (this.phase === 'feedback' || !this.current) return
 
     // 后画的在上层,命中判定从上往下找
-    let hit: Target | null = null
+    let hit: Target<Word> | null = null
     for (let i = this.targets.length - 1; i >= 0; i--) {
       if (this.targets[i].hitTest(x, y)) {
         hit = this.targets[i]
@@ -183,13 +152,13 @@ export class PlayScene {
     else this.onWrong(hit)
   }
 
-  private onCorrect(t: Target): void {
+  private onCorrect(t: Target<Word>): void {
     window.clearTimeout(this.replayTimer)
     this.game.audio.stopVoice()
     this.game.audio.playSfx('hit')
 
     t.pop()
-    this.particles.burst(t.x, t.y, hashHue(t.word.id), BALANCE.particleCount)
+    this.particles.burst(t.x, t.y, hashHue(t.item.id), BALANCE.particleCount)
     for (const o of this.targets) if (o !== t) o.dismiss()
 
     const reactionMs = this.listenStart ? performance.now() - this.listenStart : 0
@@ -202,16 +171,16 @@ export class PlayScene {
     this.combo = this.misses === 0 ? this.combo + 1 : 0
     this.bestCombo = Math.max(this.bestCombo, this.combo)
     this.score += BALANCE.baseScore + this.combo * BALANCE.comboBonus + speedBonus
-    this.records.push({ word: t.word, misses: this.misses, reactionMs })
+    this.records.push({ word: t.item, misses: this.misses, reactionMs })
 
-    this.banner = { en: t.word.en, zh: t.word.zh, x: t.x, y: t.y, r: t.r, t: 0 }
+    this.banner = { en: t.item.en, zh: t.item.zh, x: t.x, y: t.y, r: t.r, t: 0 }
     this.game.hud.setScore(this.score)
     this.game.hud.setCombo(this.combo)
     this.phase = 'feedback'
     this.phaseT = 0
   }
 
-  private onWrong(t: Target): void {
+  private onWrong(t: Target<Word>): void {
     t.reject()
     this.game.audio.playSfx('miss')
     this.misses++
