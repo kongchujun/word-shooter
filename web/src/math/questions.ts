@@ -1,4 +1,5 @@
 import type { ViewId } from '../shell/routes'
+import { BALANCE_LEVELS, type BalanceLevel } from './balance/levels'
 import { randInt, shuffle } from '../utils/math'
 
 export interface Question {
@@ -9,30 +10,46 @@ export interface Question {
   choices: number[]
 }
 
-export interface QuizLevel {
+/** 难度卡上共用的字段 */
+export interface LevelInfo {
   id: string
   name: string
   icon: string
   desc: string
   rounds: number
+}
+
+export interface QuizLevel extends LevelInfo {
   build: () => Question[]
 }
 
-/** 数学页下面的一个计算游戏 */
-export interface QuizGame {
+interface GameBase {
   view: ViewId
   icon: string
   name: string
   /** 窄屏侧栏用的短名 */
   short: string
   desc: string
+  /** 选难度页下面那句提示 */
+  tip: string
+}
+
+export interface QuizGame extends GameBase {
+  kind: 'quiz'
   levels: QuizLevel[]
 }
 
+export interface BalanceGame extends GameBase {
+  kind: 'balance'
+  levels: BalanceLevel[]
+}
+
+export type MathGame = QuizGame | BalanceGame
+
 const MULT_LEVELS: QuizLevel[] = [
-  { id: 'math.mult.easy', name: '入门', icon: '🌱', desc: '1 到 5 的乘法', rounds: 12, build: () => multQuestions(1, 5, 12) },
-  { id: 'math.mult.hard', name: '进阶', icon: '🔥', desc: '6 到 9 的乘法', rounds: 12, build: () => multQuestions(6, 9, 12) },
-  { id: 'math.mult.all', name: '全表', icon: '🏆', desc: '整张九九乘法表', rounds: 15, build: () => multQuestions(1, 9, 15) },
+  { id: 'math.mult.easy', name: '入门', icon: '🌱', desc: '1 到 5 的乘除', rounds: 12, build: () => multDivQuestions(1, 5, 12) },
+  { id: 'math.mult.hard', name: '进阶', icon: '🔥', desc: '6 到 9 的乘除', rounds: 12, build: () => multDivQuestions(6, 9, 12) },
+  { id: 'math.mult.all', name: '全表', icon: '🏆', desc: '整张九九表的乘除', rounds: 15, build: () => multDivQuestions(1, 9, 15) },
 ]
 
 const ADDSUB_LEVELS: QuizLevel[] = [
@@ -41,19 +58,50 @@ const ADDSUB_LEVELS: QuizLevel[] = [
   { id: 'math.addsub.100', name: '挑战', icon: '🏆', desc: '100 以内的加减', rounds: 15, build: () => addSubQuestions(100, 15) },
 ]
 
-export const GAMES: QuizGame[] = [
-  { view: 'math/mult', icon: '✖️', name: '九九乘法', short: '乘法', desc: '1 到 9 的乘法表', levels: MULT_LEVELS },
-  { view: 'math/addsub', icon: '➕', name: '加减法', short: '加减', desc: '100 以内的加减法', levels: ADDSUB_LEVELS },
+export const GAMES: MathGame[] = [
+  {
+    kind: 'quiz',
+    view: 'math/mult',
+    icon: '✖️',
+    name: '九九乘除',
+    short: '乘除',
+    desc: '1 到 9 的乘法和除法',
+    tip: '打掉正确答案,越快分越高',
+    levels: MULT_LEVELS,
+  },
+  {
+    kind: 'quiz',
+    view: 'math/addsub',
+    icon: '➕',
+    name: '加减法',
+    short: '加减',
+    desc: '100 以内的加减法',
+    tip: '打掉正确答案,越快分越高',
+    levels: ADDSUB_LEVELS,
+  },
+  {
+    kind: 'balance',
+    view: 'math/balance',
+    icon: '⚖️',
+    name: '天平打怪',
+    short: '天平',
+    desc: '拖勇士凑平怪物',
+    tip: '拖持剑勇士到左边,凑平就合成大英雄砍倒怪物',
+    levels: BALANCE_LEVELS,
+  },
 ]
 
-export function gameByView(view: ViewId): QuizGame | undefined {
+export function gameByView(view: ViewId): MathGame | undefined {
   return GAMES.find((g) => g.view === view)
 }
 
-// ---------- 乘法 ----------
+// ---------- 乘除(九九表) ----------
 
-/** 同一关里尽量不出重复的算式,词不够就循环取 */
-function multQuestions(from: number, to: number, rounds: number): Question[] {
+/**
+ * 乘法和除法大约各一半,都从同一张九九表出题。
+ * 除法用「积 ÷ 一个因数 = 另一个因数」,保证整除、答案仍在表内。
+ */
+function multDivQuestions(from: number, to: number, rounds: number): Question[] {
   const pool: [number, number][] = []
   for (let a = from; a <= to; a++) {
     for (let b = from; b <= to; b++) pool.push([a, b])
@@ -62,14 +110,64 @@ function multQuestions(from: number, to: number, rounds: number): Question[] {
   let picks = shuffle(pool)
   while (picks.length < rounds) picks = picks.concat(shuffle(pool))
 
-  // 上限给到 to 的下一档,不然 9 的邻居 (9+1)×9 会被当成越界扔掉
-  const cap = to * (to + 1)
-  return picks.slice(0, rounds).map(([a, b]) => {
-    const answer = a * b
-    // 背错行的典型错误:差一个乘数、乘错一档
-    const near = [answer + a, answer - a, answer + b, answer - b, (a + 1) * b, (a - 1) * b, a * (b + 1), a * (b - 1)]
-    return question(`${a} × ${b}`, answer, near, cap)
-  })
+  const seen = new Set<string>()
+  const out: Question[] = []
+  // 乘积上限给到 to 的下一档,不然邻居干扰项会被扔掉
+  const productCap = to * (to + 1)
+
+  for (const [a, b] of picks) {
+    if (out.length >= rounds) break
+    // 约一半出除法;入门里 ÷1 太水,优先用较大的那个当除数
+    const wantDiv = Math.random() < 0.5
+    const q = wantDiv ? divQuestion(a, b, to) : mulQuestion(a, b, productCap)
+    if (seen.has(q.text)) continue
+    seen.add(q.text)
+    out.push(q)
+  }
+
+  // 去重后不够就补乘法
+  for (const [a, b] of shuffle(pool)) {
+    if (out.length >= rounds) break
+    const q = mulQuestion(a, b, productCap)
+    if (seen.has(q.text)) continue
+    seen.add(q.text)
+    out.push(q)
+  }
+  return out
+}
+
+function mulQuestion(a: number, b: number, cap: number): Question {
+  const answer = a * b
+  // 背错行的典型错误:差一个乘数、乘错一档
+  const near = [answer + a, answer - a, answer + b, answer - b, (a + 1) * b, (a - 1) * b, a * (b + 1), a * (b - 1)]
+  return question(`${a} × ${b}`, answer, near, cap)
+}
+
+function divQuestion(a: number, b: number, factorCap: number): Question {
+  // 被除数 = 积,除数挑 a/b 里较大的,少出 ÷1
+  let divisor = a
+  let quotient = b
+  if (b > a || (b === a && Math.random() < 0.5)) {
+    divisor = b
+    quotient = a
+  }
+  if (divisor === 1 && quotient > 1 && Math.random() < 0.7) {
+    divisor = quotient
+    quotient = 1
+  }
+  const product = a * b
+  // 商的典型错法:除反了、差一档、当成减法
+  const near = [
+    quotient + 1,
+    quotient - 1,
+    quotient + 2,
+    divisor,
+    divisor + 1,
+    divisor - 1,
+    product - divisor,
+    Math.max(1, quotient * 2 - divisor),
+  ]
+  return question(`${product} ÷ ${divisor}`, quotient, near, factorCap)
 }
 
 // ---------- 加减 ----------

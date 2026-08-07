@@ -10,6 +10,9 @@ export interface Scene {
   onResize?(w: number, h: number): void
   onPointerMove?(x: number, y: number): void
   onPointerDown?(x: number, y: number): void
+  onPointerUp?(x: number, y: number): void
+  /** 是否藏系统光标。拖拽玩法要 false,默认 true。 */
+  aiming?: boolean
   update(dt: number): void
   draw(ctx: CanvasRenderingContext2D): void
 }
@@ -53,8 +56,8 @@ export class Engine {
   setScene(next: Scene | null): void {
     if (this.scene && this.scene !== next) this.scene.exit?.()
     this.scene = next
-    // 瞄准状态下藏掉系统光标,场景自己画准星
-    this.canvas.classList.toggle('aiming', next !== null)
+    // 瞄准状态下藏掉系统光标,场景自己画准星;拖拽玩法自己声明 aiming=false
+    this.canvas.classList.toggle('aiming', next != null && next.aiming !== false)
     next?.onResize?.(this.width, this.height)
   }
 
@@ -117,6 +120,12 @@ export class Engine {
     this.canvas.addEventListener('pointerdown', (e) => {
       // 从微信别的页面切回来时 context 常常还挂着,借这次点击把它拉起来
       this.audio.resume()
+      // 拖出 canvas 边界也不丢 pointerup(天平拖砝码用得到)
+      try {
+        this.canvas.setPointerCapture(e.pointerId)
+      } catch {
+        /* 老内核可能不支持 */
+      }
       const p = pos(e)
       this.scene?.onPointerDown?.(p.x, p.y)
     })
@@ -124,6 +133,13 @@ export class Engine {
       const p = pos(e)
       this.scene?.onPointerMove?.(p.x, p.y)
     })
+    const up = (e: PointerEvent) => {
+      const p = pos(e)
+      this.scene?.onPointerUp?.(p.x, p.y)
+    }
+    this.canvas.addEventListener('pointerup', up)
+    // 微信切走、触屏被系统抢走时也要松手,不然砝码会粘在指针上
+    this.canvas.addEventListener('pointercancel', up)
     // 触屏上别触发长按选中/滚动
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault())
   }

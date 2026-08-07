@@ -1,5 +1,5 @@
 import type { ViewId } from '../shell/routes'
-import { MATH } from './balance'
+import { MATH } from './quizTiming'
 import { GAMES } from './questions'
 
 /**

@@ -1,19 +1,21 @@
-import type { Engine } from '../core/Engine'
+import type { Engine, Scene } from '../core/Engine'
 import { HUD } from '../ui/HUD'
+import { BalanceScene, type BalanceResult } from './balance/BalanceScene'
+import type { BalanceLevel } from './balance/levels'
 import { MathScreens } from './MathScreens'
 import { QuizScene } from './QuizScene'
-import type { QuizGame, QuizLevel } from './questions'
+import type { LevelInfo, MathGame, QuizLevel } from './questions'
 import type { QuizResult } from './types'
 
 /**
  * 数学侧的应用外壳,和 Game 同构:自己一份 HUD 和面板,
- * 真正开打时把场景交给共用的 Engine。所有计算游戏共用这一个外壳。
+ * 真正开打时把场景交给共用的 Engine。quiz / balance 两种玩法都走这里。
  */
 export class MathApp {
   private hud: HUD
   private screens: MathScreens
-  private play: QuizScene | null = null
-  private game: QuizGame | null = null
+  private play: Scene | null = null
+  private game: MathGame | null = null
 
   /** 真正开打/收工时通知外壳,用来收放侧栏 */
   onPlaying: (playing: boolean) => void = () => {}
@@ -33,17 +35,27 @@ export class MathApp {
       if (e.code === 'Escape') this.quitToMenu()
     })
 
-    // dev 下挂个调试入口:控制台里 __math.debugTargets() 能看当前哪个是正确答案
+    // dev 下挂个调试入口
     if (import.meta.env.DEV) (window as unknown as { __math: MathApp }).__math = this
   }
 
-  /** 仅调试用 */
+  /** 仅调试用:射击题看靶子;天平看当前目标和左盘 */
   debugTargets(): { n: number; x: number; y: number; correct: boolean }[] {
-    return this.play?.debugTargets() ?? []
+    if (this.play instanceof QuizScene) return this.play.debugTargets()
+    return []
   }
 
-  enter(game: QuizGame): void {
-    // 从一个游戏直接切到另一个时,先把上一局收干净
+  debugBalance(): {
+    target: number
+    sum: number
+    pan: number[]
+    layout?: { tray: Record<number, { x: number; y: number }>; leftPan: { x: number; y: number } }
+  } | null {
+    if (!(this.play instanceof BalanceScene)) return null
+    return { ...this.play.debugState(), layout: this.play.debugLayout() }
+  }
+
+  enter(game: MathGame): void {
     this.teardownPlay()
     this.game = game
     this.screens.showMenu(game, (lv) => this.startLevel(lv))
@@ -55,9 +67,9 @@ export class MathApp {
     this.hud.hide()
   }
 
-  private startLevel(level: QuizLevel): void {
+  private startLevel(level: LevelInfo): void {
+    if (!this.game) return
     // 必须在点击的同步调用栈里解锁,否则 iOS 全程没声音。
-    // 音效没有文件,AudioManager 会用振荡器现场合成,不需要预加载。
     this.engine.audio.unlock()
 
     this.screens.hideAll()
@@ -65,15 +77,34 @@ export class MathApp {
     this.hud.setCombo(0)
     this.hud.show()
 
-    this.play = new QuizScene(this.engine, this.hud, level, (r) => this.finishLevel(r))
-    this.engine.setScene(this.play)
-    this.play.start()
+    if (this.game.kind === 'quiz') {
+      const quizLevel = level as QuizLevel
+      const play = new QuizScene(this.engine, this.hud, quizLevel, (r) => this.finishQuiz(r))
+      this.play = play
+      this.engine.setScene(play)
+      play.start()
+    } else {
+      const balLevel = level as BalanceLevel
+      const play = new BalanceScene(this.engine, this.hud, balLevel, (r) => this.finishBalance(r))
+      this.play = play
+      this.engine.setScene(play)
+      play.start()
+    }
     this.onPlaying(true)
   }
 
-  private finishLevel(result: QuizResult): void {
+  private finishQuiz(result: QuizResult): void {
     this.teardownPlay()
-    this.screens.showResult(
+    this.screens.showQuizResult(
+      result,
+      () => this.startLevel(result.level),
+      () => this.quitToMenu(),
+    )
+  }
+
+  private finishBalance(result: BalanceResult): void {
+    this.teardownPlay()
+    this.screens.showBalanceResult(
       result,
       () => this.startLevel(result.level),
       () => this.quitToMenu(),
