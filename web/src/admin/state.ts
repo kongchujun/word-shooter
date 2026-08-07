@@ -21,7 +21,7 @@ export interface WordsView {
   filter: string
 }
 
-export type Tab = 'words' | 'categories' | 'batch' | 'settings'
+export type Tab = 'words' | 'categories' | 'batch' | 'settings' | 'access'
 
 export async function loadState(me: Me): Promise<State> {
   const [data, settings] = await Promise.all([api.data(), api.settings()])

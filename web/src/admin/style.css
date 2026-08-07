@@ -856,3 +856,74 @@ main {
   flex: 1;
   max-width: 320px;
 }
+
+/* ---------- 访问记录 ---------- */
+
+h3.sec {
+  margin: 24px 0 10px;
+  font-size: 15px;
+}
+
+h3.sec:first-child {
+  margin-top: 0;
+}
+
+.table-wrap {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow-x: auto;
+}
+
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.tbl th,
+.tbl td {
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.tbl th {
+  position: sticky;
+  top: 0;
+  color: var(--muted);
+  font-weight: 600;
+  background: var(--panel-2);
+}
+
+.tbl tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tbl tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tbl .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tbl .bad {
+  color: var(--danger);
+}
+
+.tbl .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.tbl .ellipsis {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tbl .muted {
+  color: var(--muted);
+}

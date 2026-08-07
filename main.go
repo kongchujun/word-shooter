@@ -21,6 +21,8 @@ var embeddedWeb embed.FS
 func main() {
 	addr := flag.String("addr", ":8091", "监听地址")
 	assetsDir := flag.String("assets", "", "素材目录,默认取二进制同目录下的 assets")
+	logsDir := flag.String("logs", "", "访问日志目录,默认取二进制同目录下的 logs")
+	keepDays := flag.Int("keep-days", 14, "访问日志保留天数")
 	flag.Parse()
 
 	loadDotEnv()
@@ -34,8 +36,19 @@ func main() {
 		dir = abs
 	}
 
+	// 日志目录**不能**放进 assets —— assets 整个目录是对外开放的,
+	// 访问日志里有 IP 和 UA,放进去等于公开。默认放二进制同目录。
+	lDir := *logsDir
+	if lDir == "" {
+		lDir = siblingDir("logs")
+	}
+	if abs, err := filepath.Abs(lDir); err == nil {
+		lDir = abs
+	}
+	access := newAccessLog(lDir, *keepDays)
+
 	mux := http.NewServeMux()
-	registerAdminRoutes(mux, dir)
+	registerAdminRoutes(mux, dir, access)
 	manifestHandler := func(w http.ResponseWriter, r *http.Request) {
 		// 每次请求都重扫,丢完文件刷新页面就能看到新词
 		m, warnings := scanAssets(dir)
@@ -78,7 +91,8 @@ func main() {
 		}
 	}
 
-	if err := http.ListenAndServe(*addr, mux); err != nil {
+	// 访问日志包在最外层,所有路由都覆盖得到
+	if err := http.ListenAndServe(*addr, access.middleware(mux)); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -168,6 +182,23 @@ func defaultAssetsDir() string {
 		}
 	}
 	return candidates[0]
+}
+
+// siblingDir 返回二进制同目录下的某个子目录;开发时二进制在 build/,
+// 那就往上一层放,免得日志散落在 build/ 里被清掉。
+func siblingDir(name string) string {
+	exe, err := os.Executable()
+	if err != nil {
+		return name
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	dir := filepath.Dir(exe)
+	if filepath.Base(dir) == "build" {
+		dir = filepath.Dir(dir)
+	}
+	return filepath.Join(dir, name)
 }
 
 // 把局域网地址也打出来,方便直接在孩子的平板上打开

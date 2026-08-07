@@ -70,6 +70,37 @@ export interface ModelList {
   warning?: string
 }
 
+export interface AccessEntry {
+  t: string
+  ip: string
+  m: string
+  p: string
+  s: number
+  ms: number
+  ua?: string
+}
+
+export interface IpStat {
+  ip: string
+  /** 局域网(含回环)还是公网 —— 判断是不是外人最直接的一条 */
+  private: boolean
+  count: number
+  errors: number
+  device: string
+  first: string
+  last: string
+  lastPath: string
+}
+
+export interface AccessSummary {
+  ips: IpStat[]
+  recent: AccessEntry[]
+  total: number
+  days: number
+  keepDays: number
+  dir: string
+}
+
 export interface GenResult {
   b64: string
   mediaType: string
@@ -141,4 +172,5 @@ export const api = {
   settings: () => req<Settings>('/api/admin/settings'),
   saveSettings: (s: Partial<Settings>) => json<Settings>('PUT', '/api/admin/settings', s),
   models: () => req<ModelList>('/api/admin/models'),
+  access: (days = 7) => req<AccessSummary>(`/api/admin/access?days=${days}`),
 }

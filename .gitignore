@@ -25,3 +25,6 @@ assets/settings.json
 .idea/
 .claude/
 .DS_Store
+
+# 访问日志(含 IP,不进仓库)
+logs/

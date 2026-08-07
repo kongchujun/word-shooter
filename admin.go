@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -23,10 +24,11 @@ const maxUploadBytes = 5 << 20
 // adminServer 持有后台要用到的上下文。
 type adminServer struct {
 	assetsDir string
+	access    *accessLog
 }
 
-func registerAdminRoutes(mux *http.ServeMux, assetsDir string) {
-	s := &adminServer{assetsDir: assetsDir}
+func registerAdminRoutes(mux *http.ServeMux, assetsDir string, access *accessLog) {
+	s := &adminServer{assetsDir: assetsDir, access: access}
 
 	// me 不需要登录 —— 前端靠它判断该不该显示登录框
 	mux.HandleFunc("GET /api/admin/me", handleMe)
@@ -44,6 +46,19 @@ func registerAdminRoutes(mux *http.ServeMux, assetsDir string) {
 	mux.HandleFunc("GET /api/admin/settings", requireAdmin(s.handleGetSettings))
 	mux.HandleFunc("PUT /api/admin/settings", requireAdmin(s.handleSaveSettings))
 	mux.HandleFunc("GET /api/admin/models", requireAdmin(s.handleModels))
+	mux.HandleFunc("GET /api/admin/access", requireAdmin(s.handleAccess))
+}
+
+// ---------- 访问记录 ----------
+
+func (s *adminServer) handleAccess(w http.ResponseWriter, r *http.Request) {
+	days := 7
+	if v := r.URL.Query().Get("days"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 90 {
+			days = n
+		}
+	}
+	writeJSON(w, http.StatusOK, s.access.summary(days, 300))
 }
 
 // ---------- AI 生成 ----------

@@ -1,5 +1,6 @@
 import './style.css'
 import { api, ApiError, type Me } from './api'
+import { renderAccess } from './access'
 import { renderBatch } from './batch'
 import { renderCategories } from './categories'
 import { renderSettings } from './settings'
@@ -14,6 +15,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'categories', label: '类别' },
   { id: 'batch', label: '批量生成' },
   { id: 'settings', label: '设置' },
+  { id: 'access', label: '访问' },
 ]
 
 async function boot(): Promise<void> {
@@ -146,6 +148,9 @@ function renderDashboard(state: State): void {
         break
       case 'settings':
         renderSettings(main, state, refresh)
+        break
+      case 'access':
+        renderAccess(main, state, refresh)
         break
     }
   }
