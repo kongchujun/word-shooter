@@ -16,7 +16,7 @@ export class AssetLoader {
    */
   async loadManifest(): Promise<Manifest> {
     try {
-      const res = await fetch('/api/manifest', { cache: 'no-cache' })
+      const res = await fetch('/api/words/manifest', { cache: 'no-cache' })
       if (res.ok) {
         const data = (await res.json()) as Manifest
         if (data.words?.length) return data

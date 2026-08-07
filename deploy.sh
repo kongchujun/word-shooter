@@ -137,7 +137,8 @@ echo $! >"$PID_FILE"
 # 起不来的话当场就报出来,别等用户发现页面打不开
 for _ in $(seq 1 20); do
   sleep 0.5
-  if curl -fsS -o /dev/null "http://127.0.0.1:$PORT/api/manifest" 2>/dev/null; then
+  # 打首页而不是某个具体接口:接口以后改名也不会连累部署
+  if curl -fsS -o /dev/null "http://127.0.0.1:$PORT/" 2>/dev/null; then
     echo "==> 好了:pid $(cat "$PID_FILE"),端口 $PORT,日志 $LOG_FILE"
     exit 0
   fi

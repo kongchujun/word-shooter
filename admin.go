@@ -170,7 +170,7 @@ type adminWord struct {
 }
 
 // handleData 把类别和所有词条(含只有一半素材的)都给前端。
-// 注意和 /api/manifest 不同:那边只给图音齐全的词,这边要显示缺素材的以便补齐。
+// 注意和 /api/words/manifest 不同:那边只给图音齐全的词,这边要显示缺素材的以便补齐。
 func (s *adminServer) handleData(w http.ResponseWriter, r *http.Request) {
 	wordsFileMu.Lock()
 	wf := loadWordsFile(s.assetsDir)

@@ -30,7 +30,7 @@ type Category struct {
 	Order int    `json:"order"`
 }
 
-// Manifest 是 /api/manifest 的响应。
+// Manifest 是 /api/words/manifest 的响应。
 // Sfx 只列出真实存在的音效文件,前端不去请求不存在的,省掉一堆 404;
 // 缺的音效前端会用振荡器现场合成。
 type Manifest struct {

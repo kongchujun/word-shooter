@@ -36,7 +36,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	registerAdminRoutes(mux, dir)
-	mux.HandleFunc("/api/manifest", func(w http.ResponseWriter, r *http.Request) {
+	manifestHandler := func(w http.ResponseWriter, r *http.Request) {
 		// 每次请求都重扫,丢完文件刷新页面就能看到新词
 		m, warnings := scanAssets(dir)
 		for _, msg := range warnings {
@@ -47,7 +47,10 @@ func main() {
 		if err := json.NewEncoder(w).Encode(m); err != nil {
 			log.Println("写 manifest 失败:", err)
 		}
-	})
+	}
+	mux.HandleFunc("/api/words/manifest", manifestHandler)
+	// 旧路径。服务器上那份 deploy.sh 拿它做启动健康检查,等各处脚本都换新了再删。
+	mux.HandleFunc("/api/manifest", manifestHandler)
 	mux.Handle("/assets/", http.StripPrefix("/assets/", noDotFiles(http.FileServer(http.Dir(dir)))))
 	mux.Handle("/", webHandler())
 
