@@ -8,10 +8,13 @@ dist/
 web/dist/*
 !web/dist/.gitkeep
 
-# deploy.sh 在服务器上留下的东西
-word-shooter
-word-shooter.pid
-word-shooter.log
+# deploy.sh 在服务器上留下的东西。
+# 必须带开头的斜杠锚到仓库根:不带斜杠的 `word-shooter` 会匹配**任意层级**的
+# 同名文件和目录,把源码目录 cmd/word-shooter/ 一起吞掉 —— 踩过这个坑,
+# 症状是本地能编译,CI 检出后报 cmd/word-shooter: directory not found。
+/word-shooter
+/word-shooter.pid
+/word-shooter.log
 
 # 素材是你自己的图和音频,不进仓库
 assets/images/*
