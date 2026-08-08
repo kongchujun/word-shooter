@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { shuffle } from '../../utils/math'
 
 export interface BalanceLevel {
@@ -13,11 +14,13 @@ export interface BalanceLevel {
 }
 
 /** 每关最多 5 只,别拖太长 */
-export const BALANCE_LEVELS: BalanceLevel[] = [
-  { id: 'math.balance.easy', name: '入门', icon: '🌱', desc: '2 到 4 的重量', rounds: 5, min: 2, max: 4, build: () => targets(2, 4, 5) },
-  { id: 'math.balance.mid', name: '进阶', icon: '🔥', desc: '2 到 7 的重量', rounds: 5, min: 2, max: 7, build: () => targets(2, 7, 5) },
-  { id: 'math.balance.hard', name: '挑战', icon: '🏆', desc: '2 到 10 的重量', rounds: 5, min: 2, max: 10, build: () => targets(2, 10, 5) },
-]
+export function BALANCE_LEVELS(): BalanceLevel[] {
+  return [
+    { id: 'math.balance.easy', name: t('math.diff.easy'), icon: '🌱', desc: t('math.desc.balance.easy'), rounds: 5, min: 2, max: 4, build: () => targets(2, 4, 5) },
+    { id: 'math.balance.mid', name: t('math.diff.hard'), icon: '🔥', desc: t('math.desc.balance.mid'), rounds: 5, min: 2, max: 7, build: () => targets(2, 7, 5) },
+    { id: 'math.balance.hard', name: t('math.diff.challenge'), icon: '🏆', desc: t('math.desc.balance.hard'), rounds: 5, min: 2, max: 10, build: () => targets(2, 10, 5) },
+  ]
+}
 
 /** 尽量打散,同一关里少连着出同一个数 */
 function targets(min: number, max: number, rounds: number): number[] {

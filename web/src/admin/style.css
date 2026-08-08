@@ -927,3 +927,37 @@ h3.sec:first-child {
 .tbl .muted {
   color: var(--muted);
 }
+
+/* 顶栏 / 登录页的语言切换 */
+.lang-switch {
+  display: flex;
+  gap: 4px;
+}
+
+.lang-switch.center {
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.lang-btn {
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lang-btn:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lang-btn.active {
+  border-color: var(--accent);
+  background: rgba(77, 141, 255, 0.2);
+  color: var(--ink);
+  font-weight: 600;
+}

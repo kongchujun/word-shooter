@@ -1,5 +1,6 @@
 import type { ViewId } from '../shell/routes'
 import { MATH } from './quizTiming'
+import { t } from '../i18n'
 import { GAMES } from './questions'
 
 /**
@@ -31,10 +32,10 @@ export class MathScreen {
     this.root.innerHTML = `
       <div class="panel">
         <div class="logo">🔢</div>
-        <h1>数学计算</h1>
-        <p class="muted">挑一个开始练,每题 ${MATH.questionTime} 秒</p>
+        <h1>${t('nav.math')}</h1>
+        <p class="muted">${t('math.pick.subtitle', { sec: MATH.questionTime })}</p>
         <div class="levels">
-          ${GAMES.map(
+          ${GAMES().map(
             (g) => `
             <button class="level-card" data-view="${g.view}">
               <span class="lv-emoji">${g.icon}</span>
@@ -43,7 +44,7 @@ export class MathScreen {
             </button>`,
           ).join('')}
         </div>
-        <h3 class="sub-title">参考:九九乘法表</h3>
+        <h3 class="sub-title">${t('math.pick.table')}</h3>
         <div class="mult-table">${rows()}</div>
       </div>
     `

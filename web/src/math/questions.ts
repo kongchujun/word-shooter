@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import type { ViewId } from '../shell/routes'
 import { BALANCE_LEVELS, type BalanceLevel } from './balance/levels'
 import { randInt, shuffle } from '../utils/math'
@@ -46,53 +47,63 @@ export interface BalanceGame extends GameBase {
 
 export type MathGame = QuizGame | BalanceGame
 
-const MULT_LEVELS: QuizLevel[] = [
-  { id: 'math.mult.easy', name: '入门', icon: '🌱', desc: '1 到 5 的乘除', rounds: 12, build: () => multDivQuestions(1, 5, 12) },
-  { id: 'math.mult.hard', name: '进阶', icon: '🔥', desc: '6 到 9 的乘除', rounds: 12, build: () => multDivQuestions(6, 9, 12) },
-  { id: 'math.mult.all', name: '全表', icon: '🏆', desc: '整张九九表的乘除', rounds: 15, build: () => multDivQuestions(1, 9, 15) },
-]
+function multLevels(): QuizLevel[] {
+  return [
+    { id: 'math.mult.easy', name: t('math.diff.easy'), icon: '🌱', desc: t('math.desc.mult.easy'), rounds: 12, build: () => multDivQuestions(1, 5, 12) },
+    { id: 'math.mult.hard', name: t('math.diff.hard'), icon: '🔥', desc: t('math.desc.mult.hard'), rounds: 12, build: () => multDivQuestions(6, 9, 12) },
+    { id: 'math.mult.all', name: t('math.diff.all'), icon: '🏆', desc: t('math.desc.mult.all'), rounds: 15, build: () => multDivQuestions(1, 9, 15) },
+  ]
+}
 
-const ADDSUB_LEVELS: QuizLevel[] = [
-  { id: 'math.addsub.10', name: '入门', icon: '🌱', desc: '10 以内的加减', rounds: 12, build: () => addSubQuestions(10, 12) },
-  { id: 'math.addsub.20', name: '进阶', icon: '🔥', desc: '20 以内的加减', rounds: 12, build: () => addSubQuestions(20, 12) },
-  { id: 'math.addsub.100', name: '挑战', icon: '🏆', desc: '100 以内的加减', rounds: 15, build: () => addSubQuestions(100, 15) },
-]
+function addSubLevels(): QuizLevel[] {
+  return [
+    { id: 'math.addsub.10', name: t('math.diff.easy'), icon: '🌱', desc: t('math.desc.addsub.10'), rounds: 12, build: () => addSubQuestions(10, 12) },
+    { id: 'math.addsub.20', name: t('math.diff.hard'), icon: '🔥', desc: t('math.desc.addsub.20'), rounds: 12, build: () => addSubQuestions(20, 12) },
+    { id: 'math.addsub.100', name: t('math.diff.challenge'), icon: '🏆', desc: t('math.desc.addsub.100'), rounds: 15, build: () => addSubQuestions(100, 15) },
+  ]
+}
 
-export const GAMES: MathGame[] = [
-  {
-    kind: 'quiz',
-    view: 'math/mult',
-    icon: '✖️',
-    name: '九九乘除',
-    short: '乘除',
-    desc: '1 到 9 的乘法和除法',
-    tip: '打掉正确答案,越快分越高',
-    levels: MULT_LEVELS,
-  },
-  {
-    kind: 'quiz',
-    view: 'math/addsub',
-    icon: '➕',
-    name: '加减法',
-    short: '加减',
-    desc: '100 以内的加减法',
-    tip: '打掉正确答案,越快分越高',
-    levels: ADDSUB_LEVELS,
-  },
-  {
-    kind: 'balance',
-    view: 'math/balance',
-    icon: '⚖️',
-    name: '天平打怪',
-    short: '天平',
-    desc: '拖勇士凑平怪物',
-    tip: '拖持剑勇士到左边,凑平就合成大英雄砍倒怪物',
-    levels: BALANCE_LEVELS,
-  },
-]
+/**
+ * 游戏清单。做成函数而不是常量:文案要在 i18n 就绪后才取,
+ * 常量会在模块加载那一刻就把当时的语言定死。
+ */
+export function GAMES(): MathGame[] {
+  return [
+    {
+      kind: 'quiz',
+      view: 'math/mult',
+      icon: '✖️',
+      name: t('math.game.mult'),
+      short: t('math.game.mult.short'),
+      desc: t('math.game.mult.desc'),
+      tip: t('math.tip.quiz'),
+      levels: multLevels(),
+    },
+    {
+      kind: 'quiz',
+      view: 'math/addsub',
+      icon: '➕',
+      name: t('math.game.addsub'),
+      short: t('math.game.addsub.short'),
+      desc: t('math.game.addsub.desc'),
+      tip: t('math.tip.quiz'),
+      levels: addSubLevels(),
+    },
+    {
+      kind: 'balance',
+      view: 'math/balance',
+      icon: '⚖️',
+      name: t('math.game.balance'),
+      short: t('math.game.balance.short'),
+      desc: t('math.game.balance.desc'),
+      tip: t('math.tip.balance'),
+      levels: BALANCE_LEVELS(),
+    },
+  ]
+}
 
 export function gameByView(view: ViewId): MathGame | undefined {
-  return GAMES.find((g) => g.view === view)
+  return GAMES().find((g) => g.view === view)
 }
 
 // ---------- 乘除(九九表) ----------

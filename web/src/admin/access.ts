@@ -1,6 +1,7 @@
 import { api, ApiError, type AccessEntry, type AccessSummary, type IpStat } from './api'
 import type { State } from './state'
 import { escapeHtml, qs, toast } from './ui'
+import { t } from '../i18n'
 
 const DAY_OPTIONS = [1, 3, 7, 14, 30]
 
@@ -9,13 +10,13 @@ export function renderAccess(root: HTMLElement, _state: State, _refresh: () => P
 
   root.innerHTML = `
     <div class="toolbar">
-      <label class="muted">时间范围</label>
+      <label class="muted">${t('admin.acc.range')}</label>
       <select id="days" class="search" style="max-width:120px">
-        ${DAY_OPTIONS.map((d) => `<option value="${d}" ${d === days ? 'selected' : ''}>最近 ${d} 天</option>`).join('')}
+        ${DAY_OPTIONS.map((d) => `<option value="${d}" ${d === days ? 'selected' : ''}>${t('admin.acc.lastDays', { n: d })}</option>`).join('')}
       </select>
-      <button class="btn" id="reload">刷新</button>
+      <button class="btn" id="reload">${t('admin.refresh')}</button>
       <div class="spacer"></div>
-      <span class="stat" id="stat">加载中…</span>
+      <span class="stat" id="stat">${t('admin.acc.loading')}</span>
     </div>
     <div id="body"></div>`
 
@@ -23,7 +24,7 @@ export function renderAccess(root: HTMLElement, _state: State, _refresh: () => P
   const daysSel = qs<HTMLSelectElement>(root, '#days')
 
   const load = async (): Promise<void> => {
-    body.innerHTML = '<p class="empty">加载中…</p>'
+    body.innerHTML = `<p class="empty">${t('admin.acc.loading')}</p>`
     try {
       draw(await api.access(days))
     } catch (err) {
@@ -34,44 +35,44 @@ export function renderAccess(root: HTMLElement, _state: State, _refresh: () => P
   const draw = (d: AccessSummary): void => {
     const outside = d.ips.filter((x) => !x.private)
     qs(root, '#stat').textContent =
-      `${d.total} 次请求 · ${d.ips.length} 个 IP(其中 ${outside.length} 个来自公网)· 日志保留 ${d.keepDays} 天`
+      t('admin.acc.stat', { total: d.total, ips: d.ips.length, public: outside.length, keep: d.keepDays })
 
     if (d.total === 0) {
-      body.innerHTML = `<p class="empty">这段时间还没有访问记录。<br /><span class="muted">日志目录:${escapeHtml(d.dir)}</span></p>`
+      body.innerHTML = `<p class="empty">${t('admin.acc.empty')}<br /><span class="muted">${t('admin.acc.dbAt', { dir: escapeHtml(d.dir) })}</span></p>`
       return
     }
 
     body.innerHTML = `
-      ${outside.length > 0 ? `<p class="tip warn">有 ${outside.length} 个公网 IP 访问过。如果这台机器只给家里用,建议只在局域网开放,或者加一层反向代理限制来源。</p>` : ''}
-      <h3 class="sec">按 IP</h3>
+      ${outside.length > 0 ? `<p class="tip warn">${t('admin.acc.publicWarn', { n: outside.length })}</p>` : ''}
+      <h3 class="sec">${t('admin.acc.byIP')}</h3>
       <div class="table-wrap">
         <table class="tbl">
           <thead><tr>
-            <th>IP</th><th>来源</th>${d.geo ? '<th>归属地</th>' : ''}<th>设备</th>
-            <th class="num">请求</th><th class="num">出错</th>
-            <th>最近访问</th><th>最近页面</th><th>首次</th>
+            <th>${t('admin.acc.ip')}</th><th>${t('admin.acc.source')}</th>${d.geo ? `<th>${t('admin.acc.region')}</th>` : ''}<th>${t('admin.acc.device')}</th>
+            <th class="num">${t('admin.acc.count')}</th><th class="num">${t('admin.acc.errors')}</th>
+            <th>${t('admin.acc.last')}</th><th>${t('admin.acc.lastPath')}</th><th>${t('admin.acc.first')}</th>
           </tr></thead>
           <tbody>${d.ips.map((s) => ipRow(s, d.geo)).join('')}</tbody>
         </table>
       </div>
 
-      <h3 class="sec">最近 ${d.recent.length} 条请求</h3>
+      <h3 class="sec">${t('admin.acc.recent', { n: d.recent.length })}</h3>
       <div class="table-wrap">
         <table class="tbl">
-          <thead><tr><th>时间</th><th>IP</th><th>方法</th><th>路径</th><th class="num">状态</th><th class="num">耗时</th></tr></thead>
+          <thead><tr><th>${t('admin.acc.time')}</th><th>${t('admin.acc.ip')}</th><th>${t('admin.acc.method')}</th><th>${t('admin.acc.path')}</th><th class="num">${t('admin.acc.status')}</th><th class="num">${t('admin.acc.ms')}</th></tr></thead>
           <tbody>${d.recent.map(entryRow).join('')}</tbody>
         </table>
       </div>
       <p class="muted" style="margin-top:14px">
-        日志目录 <code>${escapeHtml(d.dir)}</code> · 图片音频和前端静态资源不记录,否则一局游戏就能刷出几十条
-        ${d.geo ? '<br />归属地用内置的离线库查(ip2region),不会把 IP 发给任何第三方' : '<br />这个版本没有内置归属地库,只显示 IP'}
+        ${t('admin.acc.footer', { dir: escapeHtml(d.dir) })}
+        ${d.geo ? `<br />${t('admin.acc.geoOn')}` : `<br />${t('admin.acc.geoOff')}`}
       </p>`
   }
 
   function ipRow(s: IpStat, geo: boolean): string {
     const src = s.private
-      ? '<span class="chip">局域网</span>'
-      : '<span class="chip warn">公网</span>'
+      ? `<span class="chip">${t('admin.acc.lan')}</span>`
+      : `<span class="chip warn">${t('admin.acc.wan')}</span>`
     // 内网没有归属地可言,查不到的也留空,别拿「未知」占地方
     const region = geo ? `<td>${s.region ? escapeHtml(s.region) : '<span class="muted">—</span>'}</td>` : ''
     return `<tr>
@@ -104,7 +105,7 @@ export function renderAccess(root: HTMLElement, _state: State, _refresh: () => P
   })
   qs(root, '#reload').addEventListener('click', () => {
     void load()
-    toast('已刷新')
+    toast(t('admin.refreshed'))
   })
 
   void load()
@@ -119,9 +120,9 @@ function when(iso: string): string {
   const hm = d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
   if (sameDay) {
     const mins = Math.round((now.getTime() - d.getTime()) / 60000)
-    if (mins < 1) return '刚刚'
-    if (mins < 60) return `${mins} 分钟前`
-    return `今天 ${hm}`
+    if (mins < 1) return t('admin.acc.justNow')
+    if (mins < 60) return t('admin.acc.minsAgo', { n: mins })
+    return t('admin.acc.todayAt', { time: hm })
   }
   return `${d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })} ${hm}`
 }

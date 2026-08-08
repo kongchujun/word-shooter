@@ -1,6 +1,7 @@
 import { api, ApiError, type TTSProvider } from './api'
 import type { State } from './state'
 import { dataURL, escapeHtml, fmtBytes, fmtCost, ID_RE, qs, toast, toId } from './ui'
+import { t } from '../i18n'
 
 interface Row {
   id: string
@@ -29,31 +30,31 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
   root.innerHTML = `
     <div class="batch-input">
       <div class="field">
-        <label>单词列表 —— 每行一个,可以写成 <code>apple 苹果</code> 一起带上中文</label>
-        <textarea id="words" rows="7" placeholder="apple 苹果&#10;banana 香蕉&#10;cat 猫"></textarea>
+        <label>${t('admin.batch.words')}</label>
+        <textarea id="words" rows="7" placeholder="${escapeHtml(t('admin.batch.placeholder'))}"></textarea>
       </div>
       <div class="field">
-        <label>加到哪些类别</label>
-        <div class="checks">${catChecks || '<span class="muted">还没建类别,可以先去「类别」页建</span>'}</div>
+        <label>${t('admin.batch.cats')}</label>
+        <div class="checks">${catChecks || `<span class="muted">${t('admin.batch.catsEmpty')}</span>`}</div>
       </div>
       <div class="field">
-        <label>发音用哪个源</label>
+        <label>${t('admin.batch.ttsSource')}</label>
         <div class="checks" id="tts-provider">
           <label class="check radio">
-            <input type="radio" name="btts" value="" checked /> 跟随设置(${escapeHtml(state.settings.ttsProvider === 'azure' ? 'Azure' : 'OpenRouter')})
+            <input type="radio" name="btts" value="" checked /> ${t('admin.batch.follow', { name: state.settings.ttsProvider === 'azure' ? 'Azure' : 'OpenRouter' })}
           </label>
           ${state.me.azure ? '<label class="check radio"><input type="radio" name="btts" value="azure" /> 🅰️ Azure</label>' : ''}
           ${state.me.openrouter ? '<label class="check radio"><input type="radio" name="btts" value="openrouter" /> 🌐 OpenRouter</label>' : ''}
         </div>
       </div>
       <div class="toolbar">
-        <button class="btn primary" id="start">开始生成</button>
-        <button class="btn" id="save-all" disabled>全部保存</button>
+        <button class="btn primary" id="start">${t('admin.batch.start')}</button>
+        <button class="btn" id="save-all" disabled>${t('admin.batch.saveAll')}</button>
         <div class="spacer"></div>
         <span class="stat" id="stat"></span>
       </div>
-      ${state.me.openrouter ? '' : '<p class="tip warn">后端没配 OPENROUTER_API_KEY,批量生成用不了。</p>'}
-      <p class="tip">生成的结果只在浏览器里预览,点「全部保存」才写进 assets。一次建议不超过 ${SOFT_LIMIT} 个词。</p>
+      ${state.me.openrouter ? '' : `<p class="tip warn">${t('admin.batch.noKey')}</p>`}
+      <p class="tip">${t('admin.batch.tip', { limit: SOFT_LIMIT })}</p>
     </div>
     <div class="batch-rows" id="rows"></div>`
 
@@ -72,7 +73,7 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
     const saved = rows.filter((r) => r.status === 'saved').length
     const cost = rows.reduce((a, r) => a + r.cost, 0)
     qs(root, '#stat').textContent = rows.length
-      ? `${done} 个待保存 / ${saved} 个已保存 / 共 ${rows.length} 个 · 花费 ${fmtCost(cost)}`
+      ? t('admin.batch.stat', { done, saved, total: rows.length, cost: fmtCost(cost) })
       : ''
     saveBtn.disabled = done === 0 || running
   }
@@ -82,14 +83,14 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
       .map((r, i) => {
         const badge =
           r.status === 'running'
-            ? '<span class="badge run">生成中…</span>'
+            ? `<span class="badge run">${t('admin.batch.stRunning')}</span>`
             : r.status === 'error'
-              ? `<span class="badge err" title="${escapeHtml(r.error ?? '')}">失败</span>`
+              ? `<span class="badge err" title="${escapeHtml(r.error ?? '')}">${t('admin.batch.stError')}</span>`
               : r.status === 'saved'
-                ? '<span class="badge ok">已保存</span>'
+                ? `<span class="badge ok">${t('admin.batch.stSaved')}</span>`
                 : r.status === 'done'
-                  ? '<span class="badge">待保存</span>'
-                  : '<span class="badge">排队中</span>'
+                  ? `<span class="badge">${t('admin.batch.stDone')}</span>`
+                  : `<span class="badge">${t('admin.batch.stPending')}</span>`
         return `
         <div class="batch-row">
           <div class="b-thumb">${r.img ? `<img src="${dataURL(r.img.b64, r.img.mediaType)}" />` : '<span class="no-img">—</span>'}</div>
@@ -97,11 +98,11 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
             <div><b>${escapeHtml(r.en)}</b> <span class="muted">${escapeHtml(r.zh || '')}</span> ${badge}</div>
             ${r.error ? `<div class="b-err">${escapeHtml(r.error)}</div>` : ''}
             ${r.aud ? `<audio controls src="${dataURL(r.aud.b64, r.aud.mediaType)}"></audio>` : ''}
-            ${r.img ? `<span class="muted small">图 ${fmtBytes(r.img.bytes)}${r.aud ? ` · 音 ${fmtBytes(r.aud.bytes)}` : ''}</span>` : ''}
+            ${r.img ? `<span class="muted small">${t('admin.batch.sizes', { img: fmtBytes(r.img.bytes), audio: r.aud ? t('admin.batch.audioSize', { size: fmtBytes(r.aud.bytes) }) : '' })}</span>` : ''}
           </div>
           <div class="b-actions">
-            <button class="icon-btn" data-retry="${i}" title="重新生成">↻</button>
-            <button class="icon-btn danger" data-drop="${i}" title="移除">✕</button>
+            <button class="icon-btn" data-retry="${i}" title="${t('admin.batch.retry')}">↻</button>
+            <button class="icon-btn danger" data-drop="${i}" title="${t('admin.batch.drop')}">✕</button>
           </div>
         </div>`
       })
@@ -153,10 +154,10 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
       .map((l) => l.trim())
       .filter(Boolean)
     if (lines.length === 0) {
-      toast('先粘一列单词', 'error')
+      toast(t('admin.batch.needWords'), 'error')
       return
     }
-    if (lines.length > SOFT_LIMIT && !confirm(`一次 ${lines.length} 个词,超过建议的 ${SOFT_LIMIT} 个。继续?`)) {
+    if (lines.length > SOFT_LIMIT && !confirm(t('admin.batch.overLimit', { n: lines.length, limit: SOFT_LIMIT }))) {
       return
     }
 
@@ -165,7 +166,7 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
       const [en, ...rest] = line.split(/[\s,，\t]+/)
       const id = toId(en)
       if (!ID_RE.test(id)) {
-        toast(`跳过不合法的行:${line}`, 'error')
+        toast(t('admin.batch.skipBad', { line }), 'error')
         continue
       }
       rows.push({ id, en: id, zh: rest.join(' '), status: 'pending', cost: 0 })
@@ -174,7 +175,7 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
 
     running = true
     startBtn.disabled = true
-    startBtn.textContent = '生成中…'
+    startBtn.textContent = t('admin.batch.stRunning')
     // 串行生成:进度看得清楚,也不会一下子把 OpenRouter 打爆
     for (const r of rows) {
       if (r.status === 'saved') continue
@@ -183,16 +184,16 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
     }
     running = false
     startBtn.disabled = false
-    startBtn.textContent = '开始生成'
+    startBtn.textContent = t('admin.batch.start')
     drawStat()
-    toast('生成完毕,检查一下再点「全部保存」')
+    toast(t('admin.batch.done'))
   })
 
   saveBtn.addEventListener('click', async () => {
     const tags = [...root.querySelectorAll<HTMLInputElement>('.checks input:checked')].map((x) => x.value)
     const todo = rows.filter((r) => r.status === 'done')
     saveBtn.disabled = true
-    saveBtn.textContent = '保存中…'
+    saveBtn.textContent = t('admin.saving')
     let ok = 0
     for (const r of todo) {
       try {
@@ -213,8 +214,8 @@ export function renderBatch(root: HTMLElement, state: State, refresh: () => Prom
       }
       draw()
     }
-    saveBtn.textContent = '全部保存'
-    toast(`保存了 ${ok} 个词`)
+    saveBtn.textContent = t('admin.batch.saveAll')
+    toast(t('admin.batch.savedN', { n: ok }))
     await refresh()
   })
 

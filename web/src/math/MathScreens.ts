@@ -3,6 +3,7 @@ import type { BalanceResult } from './balance/BalanceScene'
 import { MATH } from './quizTiming'
 import type { LevelInfo, MathGame } from './questions'
 import type { QuizRecord, QuizResult } from './types'
+import { t } from '../i18n'
 
 /** 计算游戏的选难度页和结算页。样式全部借单词那边的 .panel / .stats / .chip。 */
 export class MathScreens {
@@ -20,21 +21,21 @@ export class MathScreens {
   }
 
   showMenu(game: MathGame, onPick: (level: LevelInfo) => void): void {
-    const unit = game.kind === 'balance' ? '只怪' : '题'
+    const unit = game.kind === 'balance' ? t('math.unit.monster') : t('math.unit.question')
     const tip =
       game.kind === 'quiz'
-        ? `每题 ${MATH.questionTime} 秒,${game.tip}`
+        ? t('math.level.quiz', { sec: MATH.questionTime, tip: game.tip })
         : game.tip
 
     const cards = game.levels
       .map((lv) => {
         const p = Progress.get(lv.id)
-        const best = p ? `<span class="best">最高 ${p.best}</span>` : '<span class="best dim">还没玩过</span>'
+        const best = p ? `<span class="best">${t('game.level.best', { score: p.best })}</span>` : `<span class="best dim">${t('game.level.never')}</span>`
         return `
         <button class="level-card" data-id="${lv.id}">
           <span class="lv-emoji">${lv.icon}</span>
           <span class="lv-name">${lv.name}</span>
-          <span class="lv-meta">${lv.desc} · ${lv.rounds} ${unit}</span>
+          <span class="lv-meta">${lv.desc} · ${t('math.level.count', { n: lv.rounds, unit })}</span>
           ${best}
         </button>`
       })
@@ -69,16 +70,16 @@ export class MathScreens {
     const stars = accuracy >= 0.9 ? '⭐️⭐️⭐️' : accuracy >= 0.7 ? '⭐️⭐️' : accuracy >= 0.4 ? '⭐️' : '💪'
     const wrongHtml = wrong.length
       ? `<div class="wrong">
-           <h3>这几道还要再练练</h3>
+           <h3>${t('math.result.practiceQuiz')}</h3>
            <div class="wrong-list">${wrong.map(eqChip).join('')}</div>
          </div>`
-      : '<p class="perfect">全对,而且一道没超时!🎉</p>'
+      : `<p class="perfect">${t('math.result.allRight')}</p>`
 
     this.renderResult(result.level.name, stars, [
-      ['得分', String(result.score)],
-      ['正确率', `${right.length}/${total}`],
-      ['最佳连击', String(result.bestCombo)],
-      ['平均用时', avg ? `${(avg / 1000).toFixed(1)}s` : '—'],
+      [t('math.result.score'), String(result.score)],
+      [t('math.result.right'), `${right.length}/${total}`],
+      [t('math.result.bestCombo'), String(result.bestCombo)],
+      [t('math.result.avgTime'), avg ? `${(avg / 1000).toFixed(1)}s` : '—'],
     ], wrongHtml, onRetry, onMenu)
   }
 
@@ -94,16 +95,16 @@ export class MathScreens {
     const stars = ratio >= 0.9 ? '⭐️⭐️⭐️' : ratio >= 0.7 ? '⭐️⭐️' : ratio >= 0.4 ? '⭐️' : '💪'
     const wasteHtml = waste.length
       ? `<div class="wrong">
-           <h3>这几只用勇士偏多</h3>
+           <h3>${t('math.result.practiceBalance')}</h3>
            <div class="wrong-list">${waste.map(balChip).join('')}</div>
          </div>`
-      : '<p class="perfect">每只都用了最少人数!🎉</p>'
+      : `<p class="perfect">${t('math.result.allEfficient')}</p>`
 
     this.renderResult(result.level.name, stars, [
-      ['得分', String(result.score)],
-      ['效率', `${efficient.length}/${total}`],
-      ['最佳连击', String(result.bestCombo)],
-      ['平均用时', avg ? `${(avg / 1000).toFixed(1)}s` : '—'],
+      [t('math.result.score'), String(result.score)],
+      [t('math.result.efficient'), `${efficient.length}/${total}`],
+      [t('math.result.bestCombo'), String(result.bestCombo)],
+      [t('math.result.avgTime'), avg ? `${(avg / 1000).toFixed(1)}s` : '—'],
     ], wasteHtml, onRetry, onMenu)
   }
 
@@ -125,8 +126,8 @@ export class MathScreens {
         </div>
         ${bodyHtml}
         <div class="actions">
-          <button class="btn primary" data-act="retry">再来一次</button>
-          <button class="btn" data-act="menu">换难度</button>
+          <button class="btn primary" data-act="retry">${t('math.result.retry')}</button>
+          <button class="btn" data-act="menu">${t('math.result.menu')}</button>
         </div>
       </div>
     `
@@ -136,10 +137,10 @@ export class MathScreens {
 }
 
 function eqChip(r: QuizRecord): string {
-  const tail = r.picked === null ? '超时' : `点了 ${r.picked}`
+  const tail = r.picked === null ? t('math.result.timeout') : t('math.result.picked', { n: r.picked })
   return `<div class="chip eq"><b>${r.text} = ${r.answer}</b><i>${tail}</i></div>`
 }
 
 function balChip(r: { target: number; pieces: number; optimal: number }): string {
-  return `<div class="chip eq"><b>目标 ${r.target}</b><i>用了 ${r.pieces} 人 · 最少 ${r.optimal}</i></div>`
+  return `<div class="chip eq"><b>${t('math.result.target', { n: r.target })}</b><i>${t('math.result.balanceChip', { pieces: r.pieces, optimal: r.optimal })}</i></div>`
 }

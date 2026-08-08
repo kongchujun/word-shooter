@@ -1,4 +1,5 @@
 import { GAMES } from '../math/questions'
+import { getLocale, LOCALES, setLocale, t } from '../i18n'
 import type { ViewId } from './routes'
 
 interface NavItem {
@@ -11,21 +12,24 @@ interface NavItem {
   children?: NavItem[]
 }
 
-const NAV: NavItem[] = [
-  { id: 'home', icon: '🏠', name: '首页', short: '首页', tip: '选一个开始' },
-  { id: 'words', icon: '🎯', name: '单词射击', short: '单词', tip: '听到单词,瞄准对应的图片开枪' },
-  {
-    id: 'math',
-    icon: '🔢',
-    name: '数学计算',
-    short: '数学',
-    tip: '算得又快又准',
-    // 子项跟着游戏清单走,加新游戏不用两头改
-    children: GAMES.map((g) => ({ id: g.view, icon: g.icon, name: g.name, short: g.short })),
-  },
-]
+// 用函数不用常量:文案要等 i18n 初始化后再取,常量会在模块加载时就定死。
+function nav(): NavItem[] {
+  return [
+    { id: 'home', icon: '🏠', name: t('nav.home'), short: t('nav.home'), tip: t('nav.home.tip') },
+    { id: 'words', icon: '🎯', name: t('nav.words'), short: t('nav.words.short'), tip: t('nav.words.tip') },
+    {
+      id: 'math',
+      icon: '🔢',
+      name: t('nav.math'),
+      short: t('nav.math.short'),
+      tip: t('nav.math.tip'),
+      // 子项跟着游戏清单走,加新游戏不用两头改
+      children: GAMES().map((g) => ({ id: g.view, icon: g.icon, name: g.name, short: g.short })),
+    },
+  ]
+}
 
-const ALL_IDS = NAV.flatMap((n) => [n.id, ...(n.children ?? []).map((c) => c.id)])
+const ALL_IDS: string[] = ['home', 'words', 'math', 'math/mult', 'math/addsub', 'math/balance']
 
 /**
  * 左侧导航栏 + 首页面板。各个功能页自己管自己的 DOM,这里只负责切换。
@@ -44,7 +48,9 @@ export class Shell {
   constructor(parent: HTMLElement) {
     this.bar = document.createElement('nav')
     this.bar.className = 'sidebar'
-    this.bar.innerHTML = NAV.map((n) => navButton(n) + (n.children ?? []).map((c) => navButton(c, true)).join('')).join('')
+    this.bar.innerHTML =
+      nav().map((n) => navButton(n) + (n.children ?? []).map((c) => navButton(c, true)).join('')).join('') +
+      languagePicker()
     parent.appendChild(this.bar)
 
     this.home = document.createElement('div')
@@ -52,10 +58,10 @@ export class Shell {
     this.home.innerHTML = `
       <div class="panel">
         <div class="logo">📚</div>
-        <h1>今天学点什么</h1>
-        <p class="muted">左边选一个,或者点下面的卡片</p>
+        <h1>${t('home.title')}</h1>
+        <p class="muted">${t('home.subtitle')}</p>
         <div class="levels">
-          ${NAV.filter((n) => n.id !== 'home')
+          ${nav().filter((n) => n.id !== 'home')
             .map(
               (n) => `
             <button class="level-card" data-view="${n.id}">
@@ -72,6 +78,9 @@ export class Shell {
 
     for (const el of parent.querySelectorAll<HTMLElement>('[data-view]')) {
       el.addEventListener('click', () => this.go(el.dataset.view as ViewId))
+    }
+    for (const el of parent.querySelectorAll<HTMLElement>('[data-locale]')) {
+      el.addEventListener('click', () => setLocale(el.dataset.locale as never))
     }
     window.addEventListener('hashchange', () => this.apply())
   }
@@ -110,6 +119,20 @@ export class Shell {
     this.home.classList.toggle('hidden', this.view !== 'home')
     this.onNavigate(this.view)
   }
+}
+
+/** 侧栏底部的语言切换。换语言会整页重载,见 setLocale 的说明。 */
+function languagePicker(): string {
+  const cur = getLocale()
+  return `
+    <div class="lang-pick">
+      <span class="lang-label">${t('home.language')}</span>
+      <div class="lang-btns">
+        ${LOCALES.map(
+          (l) => `<button class="lang-btn${l.id === cur ? ' active' : ''}" data-locale="${l.id}">${l.name}</button>`,
+        ).join('')}
+      </div>
+    </div>`
 }
 
 function navButton(n: NavItem, sub = false): string {

@@ -1,4 +1,5 @@
 import type { Engine, Scene } from '../../core/Engine'
+import { t } from '../../i18n'
 import { ParticleSystem } from '../../entities/Particle'
 import { Background } from '../../render/Background'
 import type { HUD } from '../../ui/HUD'
@@ -358,18 +359,19 @@ export class BalanceScene implements Scene {
       ctx.font = '16px system-ui, sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      const tip = sum === 0 ? '拖勇士到左边,凑出怪物胸口的数' : `战力 ${sum}  ·  目标 ${this.target}`
+      const tip =
+        sum === 0 ? t('balance.hint.start') : t('balance.hint.power', { sum, target: this.target })
       ctx.fillText(tip, f.x, f.y + 128)
     } else if (this.phaseT < 0.85) {
       ctx.fillStyle = '#ffe08a'
       ctx.font = 'bold 20px system-ui, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText(this.phaseT < 0.3 ? '合 成！' : '冲 啊！', f.x, f.y + 128)
+      ctx.fillText(this.phaseT < 0.3 ? t('balance.merge') : t('balance.charge'), f.x, f.y + 128)
     } else {
       ctx.fillStyle = '#ffe08a'
       ctx.font = 'bold 22px system-ui, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText('砍倒了！', f.x, f.y + 128)
+      ctx.fillText(t('balance.defeated'), f.x, f.y + 128)
     }
   }
 

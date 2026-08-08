@@ -1,5 +1,6 @@
 import { Progress } from '../systems/Progress'
 import type { LevelDef, LevelResult, Word } from '../types'
+import { t } from '../i18n'
 
 /** 加载页 / 选关页 / 结算页。都是 DOM,只有战斗画面走 canvas。 */
 export class Screens {
@@ -16,12 +17,12 @@ export class Screens {
     this.root.innerHTML = ''
   }
 
-  showLoading(text = '正在加载素材…'): void {
+  showLoading(text = t('game.loading.assets')): void {
     this.root.classList.remove('hidden')
     this.root.innerHTML = `
       <div class="panel loading">
         <div class="logo">🎯</div>
-        <h1>单词射击</h1>
+        <h1>${t('game.title')}</h1>
         <p class="muted" data-el="text">${text}</p>
         <div class="bar"><i data-el="bar" style="width:0%"></i></div>
       </div>
@@ -41,23 +42,23 @@ export class Screens {
       ? levels
           .map((lv) => {
             const p = Progress.get(lv.id)
-            const best = p ? `<span class="best">最高 ${p.best}</span>` : '<span class="best dim">还没玩过</span>'
+            const best = p ? `<span class="best">${t('game.level.best', { score: p.best })}</span>` : `<span class="best dim">${t('game.level.never')}</span>`
             return `
           <button class="level-card" data-id="${lv.id}">
             <span class="lv-emoji">${lv.icon}</span>
             <span class="lv-name">${lv.name}</span>
-            <span class="lv-meta">${lv.rounds} 个词 · 同屏 ${lv.targetCount} 个靶</span>
+            <span class="lv-meta">${t('game.level.meta', { rounds: lv.rounds, targets: lv.targetCount })}</span>
             ${best}
           </button>`
           })
           .join('')
-      : `<p class="note">词还不够成关 —— 同一个类别至少要有 <strong>3</strong> 个词(图+音都齐)。去 <a href="/admin">后台</a> 再加几个,刷新就能玩。</p>`
+      : `<p class="note">${t('game.level.none')}</p>`
 
     this.root.innerHTML = `
       <div class="panel menu">
         <div class="logo">🎯</div>
-        <h1>单词射击</h1>
-        <p class="muted">听到单词,瞄准对应的图片开枪</p>
+        <h1>${t('game.title')}</h1>
+        <p class="muted">${t('game.subtitle')}</p>
         <div class="levels">${cards}</div>
         <p class="note">${note}</p>
       </div>
@@ -83,26 +84,26 @@ export class Screens {
     const stars = accuracy >= 0.9 ? '⭐️⭐️⭐️' : accuracy >= 0.7 ? '⭐️⭐️' : accuracy >= 0.4 ? '⭐️' : '💪'
     const wrongHtml = wrong.length
       ? `<div class="wrong">
-           <h3>这几个词还要再练练</h3>
-           <div class="wrong-list">${wrong.map((r) => wordChip(r.word, `错 ${r.misses} 次`)).join('')}</div>
+           <h3>${t('game.result.practice')}</h3>
+           <div class="wrong-list">${wrong.map((r) => wordChip(r.word, t('game.result.misses', { n: r.misses }))).join('')}</div>
          </div>`
-      : `<p class="perfect">全部一次命中,太棒了!🎉</p>`
+      : `<p class="perfect">${t('game.result.perfect')}</p>`
 
     this.root.classList.remove('hidden')
     this.root.innerHTML = `
       <div class="panel result">
         <div class="stars">${stars}</div>
-        <h1>${result.level.name} 完成</h1>
+        <h1>${t('game.result.done', { level: result.level.name })}</h1>
         <div class="stats">
-          <div><label>得分</label><b>${result.score}</b></div>
-          <div><label>一次命中</label><b>${clean}/${total}</b></div>
-          <div><label>最佳连击</label><b>${result.bestCombo}</b></div>
-          <div><label>平均反应</label><b>${avg ? `${(avg / 1000).toFixed(1)}s` : '—'}</b></div>
+          <div><label>${t('game.result.score')}</label><b>${result.score}</b></div>
+          <div><label>${t('game.result.clean')}</label><b>${clean}/${total}</b></div>
+          <div><label>${t('game.result.bestCombo')}</label><b>${result.bestCombo}</b></div>
+          <div><label>${t('game.result.avgTime')}</label><b>${avg ? `${(avg / 1000).toFixed(1)}s` : '—'}</b></div>
         </div>
         ${wrongHtml}
         <div class="actions">
-          <button class="btn primary" data-act="retry">再来一次</button>
-          <button class="btn" data-act="menu">选关</button>
+          <button class="btn primary" data-act="retry">${t('game.result.retry')}</button>
+          <button class="btn" data-act="menu">${t('game.result.menu')}</button>
         </div>
       </div>
     `

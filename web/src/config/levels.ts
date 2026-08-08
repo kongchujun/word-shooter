@@ -1,18 +1,15 @@
+import { t } from '../i18n'
 import type { Category, LevelDef, Word } from '../types'
 
 // 后台没给名字/图标时的兜底对照表(手写 words.json 或内置占位词库都会走这里)
-const TAG_NAMES: Record<string, string> = {
-  fruit: '水果',
-  animal: '动物',
-  school: '文具',
-  food: '食物',
-  body: '身体',
-  color: '颜色',
-  number: '数字',
-  family: '家人',
-  clothes: '衣物',
-  vehicle: '交通',
-  other: '综合',
+const KNOWN_TAGS = [
+  'fruit', 'animal', 'school', 'food', 'body',
+  'color', 'number', 'family', 'clothes', 'vehicle', 'other',
+] as const
+
+/** 后台没给类别名时的兜底译名;不在这张表里的 tag 直接显示 tag 本身 */
+function tagName(tag: string): string {
+  return (KNOWN_TAGS as readonly string[]).includes(tag) ? t(`cat.${tag}` as never) : ''
 }
 
 const TAG_ICONS: Record<string, string> = {
@@ -30,7 +27,7 @@ const TAG_ICONS: Record<string, string> = {
 }
 
 /** 一关至少要这么多词(1 个正确答案 + 至少 2 个干扰项) */
-const MIN_WORDS_PER_LEVEL = 3
+export const MIN_WORDS_PER_LEVEL = 3
 
 /**
  * 按 tag 把词库切成关卡,越往后同屏靶子越多、飘得越快。
@@ -45,7 +42,7 @@ export function buildLevels(words: Word[], categories: Category[] = []): LevelDe
     const i = categories.findIndex((c) => c.id === tag)
     return i < 0 ? Number.MAX_SAFE_INTEGER : i
   }
-  const nameOf = (tag: string): string => catById.get(tag)?.name || TAG_NAMES[tag] || tag
+  const nameOf = (tag: string): string => catById.get(tag)?.name || tagName(tag) || tag
   const iconOf = (tag: string): string =>
     catById.get(tag)?.icon || TAG_ICONS[tag] || '🎯'
 
@@ -83,7 +80,7 @@ export function buildLevels(words: Word[], categories: Category[] = []): LevelDe
   if (words.length >= 8) {
     levels.push({
       id: 'mixed',
-      name: '混合挑战',
+      name: t('game.level.mixed'),
       icon: '🌈',
       words,
       targetCount: Math.min(6, words.length),

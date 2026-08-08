@@ -6,6 +6,7 @@ import { HUD } from '../ui/HUD'
 import { Screens } from '../ui/Screens'
 import type { LevelDef, LevelResult, Word } from '../types'
 import type { Engine } from './Engine'
+import { t } from '../i18n'
 
 export class Game {
   readonly loader = new AssetLoader()
@@ -73,7 +74,7 @@ export class Game {
       return
     }
 
-    this.screens.showLoading('正在读取词库…')
+    this.screens.showLoading(t('game.loading.words'))
     const manifest = await this.loader.loadManifest()
     this.words = manifest.words
     this.audio.setSfx(manifest.sfx)
@@ -103,19 +104,19 @@ export class Game {
     const failed = this.loader.placeholderCount
     const missing = Math.max(noFile, failed)
     if (missing === this.words.length) {
-      return '现在用的是内置占位素材(emoji 图 + 浏览器发音)。把 <code>apple.webp</code> 和 <code>apple.mp3</code> 丢进 assets/images 和 assets/audio,刷新页面就会自动换成你的图和真人发音。'
+      return t('game.note.placeholder')
     }
     if (missing > 0) {
-      return `共 ${this.words.length} 个词,其中约 ${missing} 个还缺图片,暂时用占位图顶着。`
+      return t('game.note.missing', { total: this.words.length, missing })
     }
-    return `共 ${this.words.length} 个词。选关后只加载这一关的图和声音,不用等整库。`
+    return t('game.note.ready', { total: this.words.length })
   }
 
   private async startLevel(level: LevelDef): Promise<void> {
     // 必须在点击的同步调用栈里解锁,否则 iOS 全程没声音
     this.audio.unlock()
 
-    this.screens.showLoading('正在准备这一关…')
+    this.screens.showLoading(t('game.loading.level'))
 
     // 图和声并行;图只补本关还没缓存的
     let imgDone = 0
@@ -128,15 +129,16 @@ export class Game {
     }
 
     await Promise.all([
-      this.loader.ensureImages(level.words, (d, t) => {
-        imgDone = d
-        imgTotal = t
-        tick('正在加载图片…')
+      // 回调参数别叫 t —— 会把 i18n 的 t() 遮蔽掉
+      this.loader.ensureImages(level.words, (done, total) => {
+        imgDone = done
+        imgTotal = total
+        tick(t('game.loading.images'))
       }),
-      this.audio.preload(level.words, (d, t) => {
-        audDone = d
-        audTotal = t
-        tick('正在准备声音…')
+      this.audio.preload(level.words, (done, total) => {
+        audDone = done
+        audTotal = total
+        tick(t('game.loading.audio'))
       }),
     ])
 

@@ -541,3 +541,49 @@ body.with-sidebar .screen {
     font-size: 11px;
   }
 }
+
+/* ---------- 侧栏底部的语言切换 ---------- */
+
+.lang-pick {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.lang-label {
+  display: block;
+  margin-bottom: 6px;
+  padding-left: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lang-btns {
+  display: flex;
+  gap: 6px;
+  padding: 0 8px;
+}
+
+.lang-btn {
+  flex: 1;
+  padding: 7px 4px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.lang-btn:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lang-btn.active {
+  border-color: var(--accent);
+  background: rgba(77, 141, 255, 0.2);
+  color: var(--ink);
+  font-weight: 600;
+}

@@ -5,6 +5,9 @@ import { MathApp } from './math/MathApp'
 import { MathScreen } from './math/MathScreen'
 import { gameByView } from './math/questions'
 import { Shell } from './shell/Shell'
+import { applyDocumentLang } from './i18n'
+
+applyDocumentLang()
 
 const canvas = document.getElementById('game') as HTMLCanvasElement
 const ui = document.getElementById('ui') as HTMLDivElement
