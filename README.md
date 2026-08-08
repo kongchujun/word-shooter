@@ -94,13 +94,22 @@ Azure 出来的是 24kHz 单声道 48kbps mp3,一个单词约 6–10KB / 1.1–1
 - **归属地用内置的离线库查**([ip2region](https://gitee.com/lionsoul/ip2region),Apache 2.0 / MIT),不调任何第三方接口、不把访问者 IP 发给别人。国内到市级 + 运营商,国外到国家/州
 - 局域网地址不查归属地(没有意义),只标「局域网 / 公网」
 
-**为什么用 SQLite 还能保持单二进制**:驱动是 `modernc.org/sqlite`,纯 Go 实现。
-常见的 `mattn/go-sqlite3` 要 CGO,一开 CGO 就没法 `CGO_ENABLED=0` 交叉编译 linux/arm64,
-`deploy.sh` 那套"下载一个静态二进制就能跑"会直接断掉。代价是二进制大了约 12MB。
+数据库交互走 GORM(`gorm.io/gorm`),驱动是 **`github.com/glebarez/sqlite`** —— 纯 Go,底层是
+`modernc.org/sqlite`。**不能用 GORM 默认的 `gorm.io/driver/sqlite`**,它底层是 `mattn/go-sqlite3`,
+要 CGO;一开 CGO 就没法 `CGO_ENABLED=0` 交叉编译 linux/arm64,`deploy.sh` 那套"下载一个静态
+二进制就能跑"会直接断掉。
+
+按 IP 聚合那条查询没用 GORM 的链式 API 而是 `db.Raw()`:要在一次查询里同时拿到聚合值和
+"最近一条"的 path/ua 得靠窗口函数,用 ORM 拼反而更绕更难读。其余简单读写都走 GORM。
 
 **删了数据文件也要变小**:SQLite 只 DELETE 的话空页会一直留着,文件只涨不落。
-建库时设了 `auto_vacuum=INCREMENTAL`(必须在建表前设),清理后再跑 `incremental_vacuum`
-才能真的把空间还回去。这条有测试盯着:`go test ./internal/store/`。
+`auto_vacuum` 又只在文件还没建页时设置才生效,建完表再设是哑的 —— 而且**不会报任何错**,
+只表现为"用着用着数据库越来越大"。
+
+这里没走 DSN 里的 `_pragma`:实测 glebarez 驱动下 `journal_mode` 生效、`auto_vacuum` 却是 0
+(pragma 执行顺序把它盖掉了),而依赖顺序的写法换个驱动版本就可能再次失效。改成打开后显式
+`PRAGMA auto_vacuum=INCREMENTAL` + `VACUUM` 重建整个文件,不依赖顺序,顺带还能把早先建的旧库转过来。
+有三条测试盯着这一块:`go test ./internal/store/`。
 
 想自己查的话直接开库就行:
 

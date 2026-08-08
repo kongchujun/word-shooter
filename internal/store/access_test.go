@@ -97,7 +97,7 @@ func TestPruneDropsOldRowsAndShrinksFile(t *testing.T) {
 	}
 
 	// 把 WAL 落进主库,才能量到真实文件大小
-	if _, err := s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+	if err := s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`).Error; err != nil {
 		t.Fatalf("checkpoint: %v", err)
 	}
 	before := fileSize(t, path)
@@ -112,7 +112,7 @@ func TestPruneDropsOldRowsAndShrinksFile(t *testing.T) {
 		t.Errorf("清理后应只剩 10 条,拿到 %d", total)
 	}
 
-	if _, err := s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+	if err := s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`).Error; err != nil {
 		t.Fatalf("checkpoint: %v", err)
 	}
 	after := fileSize(t, path)
@@ -129,4 +129,56 @@ func fileSize(t *testing.T, path string) int64 {
 		t.Fatalf("stat %s: %v", path, err)
 	}
 	return fi.Size()
+}
+
+// auto_vacuum 一旦没生效,删数据就不会释放空间,而且不会报任何错 ——
+// 只会表现为"用着用着数据库越来越大"。这条直接盯住那个开关。
+func TestAutoVacuumIsIncremental(t *testing.T) {
+	s := newTestStore(t, 5)
+
+	var mode int
+	if err := s.db.Raw(`PRAGMA auto_vacuum`).Scan(&mode).Error; err != nil {
+		t.Fatalf("读 auto_vacuum: %v", err)
+	}
+	if mode != 2 {
+		t.Fatalf("auto_vacuum 应该是 2(incremental),拿到 %d —— "+
+			"删掉的数据将永远不还给文件系统", mode)
+	}
+}
+
+// 重开已有的库不该重复 VACUUM(那会在大库上卡住启动),
+// 但设置必须还在。
+func TestAutoVacuumSurvivesReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "access.db")
+
+	first, err := OpenAccessStore(path, 5)
+	if err != nil {
+		t.Fatalf("首次打开: %v", err)
+	}
+	insertAt(t, first, time.Now(), "1.1.1.1", "/", 200, "ua")
+	if err := first.Close(); err != nil {
+		t.Fatalf("关闭: %v", err)
+	}
+
+	again, err := OpenAccessStore(path, 5)
+	if err != nil {
+		t.Fatalf("重新打开: %v", err)
+	}
+	defer again.Close()
+
+	var mode int
+	if err := again.db.Raw(`PRAGMA auto_vacuum`).Scan(&mode).Error; err != nil {
+		t.Fatalf("读 auto_vacuum: %v", err)
+	}
+	if mode != 2 {
+		t.Errorf("重开后 auto_vacuum 应该还是 2,拿到 %d", mode)
+	}
+
+	n, err := again.Total(5)
+	if err != nil {
+		t.Fatalf("Total: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("重开后数据应该还在,拿到 %d 条", n)
+	}
 }
