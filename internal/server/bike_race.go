@@ -12,6 +12,7 @@ import (
 func (s *Server) registerBikeRace(e *gin.Engine) {
 	g := e.Group("/api/bike")
 	{
+		g.GET("/rooms", s.handleBikeListOpen)
 		g.POST("/rooms", s.handleBikeCreate)
 		g.POST("/rooms/:code/join", s.handleBikeJoin)
 		g.POST("/rooms/:code/sync", s.handleBikeSync)
@@ -19,7 +20,8 @@ func (s *Server) registerBikeRace(e *gin.Engine) {
 }
 
 type bikeCreateBody struct {
-	Max int `json:"max"`
+	Max    int  `json:"max"`
+	Public bool `json:"public"`
 }
 
 type bikeAuthBody struct {
@@ -34,10 +36,15 @@ type bikeAuthBody struct {
 type bikeSessionJSON struct {
 	Code     string `json:"code"`
 	Max      int    `json:"max"`
+	Public   bool   `json:"public"`
 	PlayerID string `json:"playerId"`
 	Token    string `json:"token"`
 	Seat     int    `json:"seat"`
 	Host     bool   `json:"host"`
+}
+
+func (s *Server) handleBikeListOpen(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"rooms": s.bike.ListOpen()})
 }
 
 func (s *Server) handleBikeCreate(c *gin.Context) {
@@ -46,13 +53,13 @@ func (s *Server) handleBikeCreate(c *gin.Context) {
 		abortJSON(c, http.StatusBadRequest, "参数不对")
 		return
 	}
-	room, host, err := s.bike.Create(body.Max)
+	room, host, err := s.bike.Create(body.Max, body.Public)
 	if err != nil {
 		bikeErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, bikeSessionJSON{
-		Code: room.Code, Max: room.Max,
+		Code: room.Code, Max: room.Max, Public: room.Public,
 		PlayerID: host.ID, Token: host.Token, Seat: host.Seat, Host: true,
 	})
 }
@@ -64,7 +71,7 @@ func (s *Server) handleBikeJoin(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, bikeSessionJSON{
-		Code: room.Code, Max: room.Max,
+		Code: room.Code, Max: room.Max, Public: room.Public,
 		PlayerID: guest.ID, Token: guest.Token, Seat: guest.Seat, Host: false,
 	})
 }

@@ -196,11 +196,13 @@ export function drawBike(
   color = '#4d8dff',
   helmet = '#e85d4c',
   alpha = 1,
+  scale = 1,
 ): void {
-  const bob = Math.sin(pedal * 2) * 2
+  const bob = Math.sin(pedal * 2) * 2 * scale
   ctx.save()
   ctx.globalAlpha = alpha
   ctx.translate(x, y + bob)
+  if (scale !== 1) ctx.scale(scale, scale)
 
   const spin = pedal * 3
   for (const ox of [-28, 28]) {

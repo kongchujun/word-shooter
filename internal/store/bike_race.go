@@ -22,10 +22,20 @@ var (
 type BikeRoom struct {
 	Code      string
 	Max       int
+	Public    bool // 公开房:大厅可见,不用对别人报房间号
 	CreatedAt time.Time
 	StartAt   time.Time // zero = 还没开打
 	Status    string    // waiting | racing | done
 	Players   []*BikePlayer
+}
+
+// BikeOpenRoom 大厅列表里展示的公开等待房。
+type BikeOpenRoom struct {
+	Code        string `json:"code"`
+	Max         int    `json:"max"`
+	PlayerCount int    `json:"playerCount"`
+	Capacity    int    `json:"capacity"`
+	ReadyCount  int    `json:"readyCount"`
 }
 
 type BikePlayer struct {
@@ -69,7 +79,7 @@ func (h *BikeRaceHub) loop() {
 	}
 }
 
-func (h *BikeRaceHub) Create(max int) (*BikeRoom, *BikePlayer, error) {
+func (h *BikeRaceHub) Create(max int, public bool) (*BikeRoom, *BikePlayer, error) {
 	if max != 20 && max != 50 && max != 100 {
 		return nil, nil, ErrBadMax
 	}
@@ -81,12 +91,50 @@ func (h *BikeRaceHub) Create(max int) (*BikeRoom, *BikePlayer, error) {
 	room := &BikeRoom{
 		Code:      code,
 		Max:       max,
+		Public:    public,
 		CreatedAt: time.Now(),
 		Status:    "waiting",
 		Players:   []*BikePlayer{host},
 	}
 	h.rooms[code] = room
 	return room, host, nil
+}
+
+// ListOpen 返回仍在等人的公开房(未满、未开打)。
+func (h *BikeRaceHub) ListOpen() []BikeOpenRoom {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]BikeOpenRoom, 0)
+	for _, r := range h.rooms {
+		if !r.Public || r.Status != "waiting" {
+			continue
+		}
+		if len(r.Players) >= BikeRaceCapacity {
+			continue
+		}
+		ready := 0
+		for _, p := range r.Players {
+			if p.Ready {
+				ready++
+			}
+		}
+		out = append(out, BikeOpenRoom{
+			Code:        r.Code,
+			Max:         r.Max,
+			PlayerCount: len(r.Players),
+			Capacity:    BikeRaceCapacity,
+			ReadyCount:  ready,
+		})
+	}
+	// 人多的排前面,方便一键上车
+	for i := 0; i < len(out); i++ {
+		for j := i + 1; j < len(out); j++ {
+			if out[j].PlayerCount > out[i].PlayerCount {
+				out[i], out[j] = out[j], out[i]
+			}
+		}
+	}
+	return out
 }
 
 func (h *BikeRaceHub) Join(code string) (*BikeRoom, *BikePlayer, error) {
@@ -120,6 +168,7 @@ type BikeSyncIn struct {
 type BikeSyncOut struct {
 	Code        string     `json:"code"`
 	Max         int        `json:"max"`
+	Public      bool       `json:"public"`
 	Status      string     `json:"status"`
 	StartAt     int64      `json:"startAt"`
 	Countdown   int        `json:"countdown"`
@@ -189,6 +238,7 @@ func (h *BikeRaceHub) Sync(code string, in BikeSyncIn) (*BikeSyncOut, error) {
 	out := &BikeSyncOut{
 		Code:        room.Code,
 		Max:         room.Max,
+		Public:      room.Public,
 		Status:      room.Status,
 		Capacity:    BikeRaceCapacity,
 		PlayerCount: len(room.Players),

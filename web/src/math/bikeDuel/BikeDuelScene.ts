@@ -101,6 +101,7 @@ export class BikeDuelScene implements Scene {
 
   private w = 800
   private h = 600
+  private safe = { top: 0, right: 0, bottom: 0, left: 0 }
 
   constructor(
     private engine: Engine,
@@ -122,6 +123,7 @@ export class BikeDuelScene implements Scene {
   start(): void {
     this.w = this.engine.width
     this.h = this.engine.height
+    this.refreshSafeArea()
     this.bg.resize(this.w, this.h)
     this.hud.setScore(0)
     this.hud.setCombo(0)
@@ -138,8 +140,82 @@ export class BikeDuelScene implements Scene {
   onResize(w: number, h: number): void {
     this.w = w
     this.h = h
+    this.refreshSafeArea()
     this.bg.resize(w, h)
     this.layoutChoices()
+  }
+
+  /** 读 iOS/Android 安全区,竖屏底部 Home 条尤其影响选项命中 */
+  private refreshSafeArea(): void {
+    const probe = document.createElement('div')
+    probe.style.cssText =
+      'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)'
+    document.body.appendChild(probe)
+    const cs = getComputedStyle(probe)
+    this.safe = {
+      top: parseFloat(cs.paddingTop) || 0,
+      right: parseFloat(cs.paddingRight) || 0,
+      bottom: parseFloat(cs.paddingBottom) || 0,
+      left: parseFloat(cs.paddingLeft) || 0,
+    }
+    probe.remove()
+  }
+
+  /** 竖屏/矮屏:压缩赛道与答题区,避免题板和选项贴边溢出 */
+  private raceLayout() {
+    const compact = this.h > this.w || this.h < 560 || this.w < 480
+    const narrow = this.w < 420
+    const padB = Math.max(compact ? 14 : 10, this.safe.bottom + (compact ? 10 : 4))
+    const choiceR = narrow ? 28 : compact ? 32 : 36
+    const choiceY = this.h - padB - choiceR
+    const qH = narrow ? 42 : compact ? 46 : 52
+    const qFont = narrow ? 20 : compact ? 24 : 28
+    const qW = Math.min(compact ? 300 : 320, this.w - (narrow ? 16 : 24))
+    const qY = choiceY - choiceR - (compact ? 14 : 18) - qH / 2
+
+    const hudEl = document.querySelector('.hud:not(.hidden)') as HTMLElement | null
+    const hudBottom = hudEl
+      ? hudEl.getBoundingClientRect().bottom + 6
+      : Math.max(56, this.safe.top + 48)
+    const panelTop = Math.max(hudBottom, this.safe.top + 44)
+    const panelW = Math.min(compact ? 260 : 280, this.w - 20)
+    const panelH = compact ? 58 : 52
+    const panelStacked = compact || narrow
+
+    // 赛道夹在顶部信息条和题板之间
+    let roadTop = compact
+      ? panelTop + panelH + 10
+      : this.h * 0.38
+    let roadBot = compact
+      ? qY - 40
+      : this.h * 0.78
+    const minBand = compact ? 88 : 140
+    if (roadBot - roadTop < minBand) {
+      const mid = (roadTop + roadBot) / 2
+      roadTop = mid - minBand / 2
+      roadBot = mid + minBand / 2
+    }
+    const bikeScale = narrow ? 0.72 : compact ? 0.82 : 1
+    const midX = this.w * (narrow ? 0.34 : compact ? 0.3 : 0.28)
+
+    return {
+      compact,
+      narrow,
+      choiceR,
+      choiceY,
+      qH,
+      qFont,
+      qW,
+      qY,
+      panelTop,
+      panelW,
+      panelH,
+      panelStacked,
+      roadTop,
+      roadBot,
+      bikeScale,
+      midX,
+    }
   }
 
   private beginPlay(): void {
@@ -166,14 +242,15 @@ export class BikeDuelScene implements Scene {
       return
     }
     const n = this.current.choices.length
-    const y = this.h - 78
-    const gap = Math.min(120, (this.w - 80) / n)
+    const L = this.raceLayout()
+    const side = L.narrow ? 20 : 40
+    const gap = Math.min(L.narrow ? 78 : 120, (this.w - side * 2) / Math.max(1, n))
     const x0 = this.w / 2 - ((n - 1) * gap) / 2
     this.choices = this.current.choices.map((value, i) => ({
       value,
       x: x0 + i * gap,
-      y,
-      r: 36,
+      y: L.choiceY,
+      r: L.choiceR,
     }))
   }
 
@@ -386,41 +463,46 @@ export class BikeDuelScene implements Scene {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
+    const L = this.raceLayout()
     this.bg.draw(ctx)
-    drawRoad(ctx, this.w, this.h, this.scroll)
+    drawRoad(ctx, this.w, this.h, this.scroll, L.roadTop, L.roadBot)
 
-    if (this.opts.mode === 'ghost') this.drawGhostRace(ctx)
-    else this.drawOnlineRace(ctx)
+    if (this.opts.mode === 'ghost') this.drawGhostRace(ctx, L)
+    else this.drawOnlineRace(ctx, L)
 
     this.particles.draw(ctx)
-    this.drawHudPanel(ctx)
+    this.drawHudPanel(ctx, L)
     if (this.phase === 'countdown') {
-      this.drawCountdown(ctx)
+      this.drawCountdown(ctx, L)
       return
     }
-    this.drawQuestion(ctx)
-    this.drawChoices(ctx)
+    this.drawQuestion(ctx, L)
+    this.drawChoices(ctx, L)
   }
 
-  private drawGhostRace(ctx: CanvasRenderingContext2D): void {
-    const mid = this.w * 0.28
-    const lead = clamp((this.displayDist - this.displayRival) * 1.1, -90, 90)
+  private drawGhostRace(ctx: CanvasRenderingContext2D, L: ReturnType<BikeDuelScene['raceLayout']>): void {
+    const mid = L.midX
+    const leadMax = L.narrow ? 56 : L.compact ? 70 : 90
+    const lead = clamp((this.displayDist - this.displayRival) * 1.1, -leadMax, leadMax)
     const rivalX = mid + lead * 0.15
     const myX = mid + lead
-    const rivalY = this.h * 0.46
-    const myY = this.h * 0.58
-    drawBike(ctx, rivalX, rivalY, this.rivalPedal, '#9b6bff', '#7c4dff', 0.85)
-    this.drawNameTag(ctx, rivalX, rivalY - 62, t('math.duel.rivalGhost'), false)
-    drawBike(ctx, myX, myY, this.pedal, '#4d8dff', '#e85d4c', 1)
-    this.drawYouMarker(ctx, myX, myY, null)
+    const rivalY = this.laneY(0, 2, L)
+    const myY = this.laneY(1, 2, L)
+    const tagLift = 48 * L.bikeScale + 14
+    drawBike(ctx, rivalX, rivalY, this.rivalPedal, '#9b6bff', '#7c4dff', 0.85, L.bikeScale * 0.9)
+    this.drawNameTag(ctx, rivalX, rivalY - tagLift, t('math.duel.rivalGhost'), false, L)
+    drawBike(ctx, myX, myY, this.pedal, '#4d8dff', '#e85d4c', 1, L.bikeScale)
+    this.drawYouMarker(ctx, myX, myY, null, L)
   }
 
-  private drawOnlineRace(ctx: CanvasRenderingContext2D): void {
-    const mid = this.w * 0.26
+  private drawOnlineRace(ctx: CanvasRenderingContext2D, L: ReturnType<BikeDuelScene['raceLayout']>): void {
+    const mid = L.midX
     const seats = this.racers.map((r) => r.seat)
     if (!seats.includes(this.mySeat) && this.mySeat) seats.push(this.mySeat)
     seats.sort((a, b) => a - b)
     const total = Math.max(1, seats.length)
+    const leadMax = L.narrow ? 48 : L.compact ? 72 : 100
+    const tagLift = 44 * L.bikeScale + 12
 
     // 先画别人,自己最后盖在上面
     for (const seat of seats) {
@@ -428,40 +510,40 @@ export class BikeDuelScene implements Scene {
       const r = this.racers.find((x) => x.seat === seat)
       const dist = r?.display ?? 0
       const pedal = r?.pedal ?? 0
-      const lead = clamp((dist - this.displayDist) * 1.1, -100, 100)
+      const lead = clamp((dist - this.displayDist) * 1.1, -leadMax, leadMax)
       const x = mid + lead
-      const y = this.laneY(seats.indexOf(seat), total)
+      const y = this.laneY(seats.indexOf(seat), total, L)
       const style = SEAT_STYLE[(seat - 1) % SEAT_STYLE.length]
-      drawBike(ctx, x, y, pedal, style.frame, style.helmet, 0.8)
-      this.drawNameTag(ctx, x, y - 58, t('math.duel.seatLabel', { n: seat }), false)
+      drawBike(ctx, x, y, pedal, style.frame, style.helmet, 0.8, L.bikeScale * 0.88)
+      this.drawNameTag(ctx, x, y - tagLift, t('math.duel.seatLabel', { n: seat }), false, L)
     }
 
-    const myLead = 0
-    const myX = mid + myLead
-    const myY = this.laneY(seats.indexOf(this.mySeat), total)
+    const myX = mid
+    const myY = this.laneY(seats.indexOf(this.mySeat), total, L)
     const mine = SEAT_STYLE[(this.mySeat - 1) % SEAT_STYLE.length]
-    drawBike(ctx, myX, myY, this.pedal, mine.frame, mine.helmet, 1)
-    this.drawYouMarker(ctx, myX, myY, this.mySeat)
+    drawBike(ctx, myX, myY, this.pedal, mine.frame, mine.helmet, 1, L.bikeScale)
+    this.drawYouMarker(ctx, myX, myY, this.mySeat, L)
   }
 
-  private laneY(index: number, total: number): number {
-    const top = this.h * 0.42
-    const bot = this.h * 0.62
+  private laneY(index: number, total: number, L = this.raceLayout()): number {
+    const top = L.roadTop + (L.compact ? 28 : 36)
+    const bot = L.roadBot - (L.compact ? 22 : 30)
     if (total <= 1) return (top + bot) / 2
     const i = Math.max(0, index)
     return top + ((bot - top) * i) / (total - 1)
   }
 
   private myBikeX(): number {
-    return this.w * 0.26
+    return this.raceLayout().midX
   }
 
   private myBikeY(): number {
-    if (this.opts.mode === 'ghost') return this.h * 0.58
+    const L = this.raceLayout()
+    if (this.opts.mode === 'ghost') return this.laneY(1, 2, L)
     const seats = this.racers.map((r) => r.seat).sort((a, b) => a - b)
     if (!seats.includes(this.mySeat)) seats.push(this.mySeat)
     seats.sort((a, b) => a - b)
-    return this.laneY(seats.indexOf(this.mySeat), Math.max(1, seats.length))
+    return this.laneY(seats.indexOf(this.mySeat), Math.max(1, seats.length), L)
   }
 
   private drawNameTag(
@@ -470,13 +552,17 @@ export class BikeDuelScene implements Scene {
     y: number,
     label: string,
     mine: boolean,
+    L = this.raceLayout(),
   ): void {
-    ctx.font = mine ? 'bold 14px system-ui, sans-serif' : '13px system-ui, sans-serif'
-    const padX = 10
-    const w = Math.max(48, ctx.measureText(label).width + padX * 2)
-    const h = 24
+    const fontSize = L.narrow ? (mine ? 12 : 11) : mine ? 14 : 13
+    ctx.font = `${mine ? 'bold ' : ''}${fontSize}px system-ui, sans-serif`
+    const padX = L.narrow ? 7 : 10
+    const w = Math.max(40, ctx.measureText(label).width + padX * 2)
+    const h = L.narrow ? 20 : 24
+    // 防止标签画出屏幕
+    const cx = clamp(x, w / 2 + 4, this.w - w / 2 - 4)
     ctx.fillStyle = mine ? 'rgba(45, 110, 255, 0.92)' : 'rgba(80, 50, 130, 0.75)'
-    roundRect(ctx, x - w / 2, y - h / 2, w, h, 10)
+    roundRect(ctx, cx - w / 2, y - h / 2, w, h, 10)
     ctx.fill()
     if (mine) {
       ctx.strokeStyle = 'rgba(255,220,120,0.95)'
@@ -486,100 +572,138 @@ export class BikeDuelScene implements Scene {
     ctx.fillStyle = '#fff'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(label, x, y + 0.5)
+    ctx.fillText(label, cx, y + 0.5)
   }
 
   /** 自己:座位号 +「这是我」+ 箭头小旗 */
-  private drawYouMarker(ctx: CanvasRenderingContext2D, bikeX: number, bikeY: number, seat: number | null): void {
-    const tagY = bikeY - 78
+  private drawYouMarker(
+    ctx: CanvasRenderingContext2D,
+    bikeX: number,
+    bikeY: number,
+    seat: number | null,
+    L = this.raceLayout(),
+  ): void {
+    const s = L.bikeScale
+    const tagY = bikeY - (L.compact ? 56 : 78) * (L.narrow ? 0.85 : 1)
     const label =
       seat && seat > 0
-        ? `${t('math.duel.seatLabel', { n: seat })} · ${t('math.duel.youBadge')}`
+        ? L.narrow
+          ? `${seat} · ${t('math.duel.youBadge')}`
+          : `${t('math.duel.seatLabel', { n: seat })} · ${t('math.duel.youBadge')}`
         : t('math.duel.youBadge')
-    this.drawNameTag(ctx, bikeX, tagY, label, true)
+    this.drawNameTag(ctx, bikeX, tagY, label, true, L)
 
     ctx.fillStyle = '#ffd24a'
     ctx.beginPath()
-    ctx.moveTo(bikeX, bikeY - 54)
-    ctx.lineTo(bikeX - 7, bikeY - 64)
-    ctx.lineTo(bikeX + 7, bikeY - 64)
+    ctx.moveTo(bikeX, bikeY - 54 * s)
+    ctx.lineTo(bikeX - 7 * s, bikeY - 64 * s)
+    ctx.lineTo(bikeX + 7 * s, bikeY - 64 * s)
     ctx.closePath()
     ctx.fill()
 
-    const fx = bikeX - 34
-    const fy = bikeY - 36
+    // 竖屏空间紧,旗子可省略
+    if (L.narrow) return
+    const fx = bikeX - 34 * s
+    const fy = bikeY - 36 * s
     ctx.strokeStyle = '#fff'
     ctx.lineWidth = 2
     ctx.beginPath()
-    ctx.moveTo(fx, fy + 22)
+    ctx.moveTo(fx, fy + 22 * s)
     ctx.lineTo(fx, fy)
     ctx.stroke()
     ctx.fillStyle = '#ff5a5a'
     ctx.beginPath()
     ctx.moveTo(fx, fy)
-    ctx.lineTo(fx + 16, fy + 6)
-    ctx.lineTo(fx, fy + 12)
+    ctx.lineTo(fx + 16 * s, fy + 6 * s)
+    ctx.lineTo(fx, fy + 12 * s)
     ctx.closePath()
     ctx.fill()
   }
 
-  private drawCountdown(ctx: CanvasRenderingContext2D): void {
+  private drawCountdown(ctx: CanvasRenderingContext2D, L = this.raceLayout()): void {
     const n = Math.ceil(this.countdownLeft)
+    const bw = L.narrow ? 120 : 160
+    const bh = L.narrow ? 80 : 100
+    const font = L.narrow ? 36 : 48
     ctx.fillStyle = 'rgba(20,26,40,0.55)'
-    roundRect(ctx, this.w / 2 - 80, this.h / 2 - 50, 160, 100, 16)
+    roundRect(ctx, this.w / 2 - bw / 2, this.h / 2 - bh / 2, bw, bh, 16)
     ctx.fill()
     ctx.fillStyle = '#fff'
-    ctx.font = 'bold 48px system-ui, sans-serif'
+    ctx.font = `bold ${font}px system-ui, sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(n > 0 ? String(n) : 'GO!', this.w / 2, this.h / 2)
   }
 
-  private drawHudPanel(ctx: CanvasRenderingContext2D): void {
+  private drawHudPanel(ctx: CanvasRenderingContext2D, L = this.raceLayout()): void {
     const urgent = this.phase !== 'countdown' && this.timeLeft <= 5
+    const x = (this.w - L.panelW) / 2
+    const y = L.panelTop
     ctx.fillStyle = urgent ? 'rgba(180,40,40,0.55)' : 'rgba(20,26,40,0.55)'
-    roundRect(ctx, this.w / 2 - 140, 72, 280, 52, 12)
+    roundRect(ctx, x, y, L.panelW, L.panelH, 12)
     ctx.fill()
     ctx.fillStyle = urgent ? '#ffd0d0' : '#fff'
-    ctx.font = 'bold 18px system-ui, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     const clock = this.phase === 'countdown' ? '…' : `${this.timeLeft.toFixed(1)}s`
-    ctx.fillText(`⏱ ${clock}`, this.w / 2, 88)
-    ctx.font = 'bold 14px system-ui, sans-serif'
-    ctx.fillStyle = '#ffd24a'
-    if (this.opts.mode === 'online' && this.mySeat) {
-      ctx.fillText(
-        `${t('math.duel.seatLabel', { n: this.mySeat })} ${Math.round(this.displayDist)}m`,
-        this.w / 2 - 70,
-        110,
-      )
-      ctx.fillStyle = 'rgba(255,255,255,0.75)'
-      ctx.font = '14px system-ui, sans-serif'
-      ctx.fillText(`· ${t('math.duel.leader')} ${Math.round(this.displayRival)}m`, this.w / 2 + 70, 110)
+    const meLabel =
+      this.opts.mode === 'online' && this.mySeat
+        ? `${t('math.duel.seatLabel', { n: this.mySeat })} ${Math.round(this.displayDist)}m`
+        : `${t('math.duel.youBadge')} ${Math.round(this.displayDist)}m`
+    const rivalLabel =
+      this.opts.mode === 'online'
+        ? `${t('math.duel.leader')} ${Math.round(this.displayRival)}m`
+        : `${t('math.duel.rivalGhost')} ${Math.round(this.displayRival)}m`
+
+    if (L.panelStacked) {
+      ctx.font = `bold ${L.narrow ? 15 : 16}px system-ui, sans-serif`
+      ctx.fillText(`⏱ ${clock}`, this.w / 2, y + L.panelH * 0.32)
+      ctx.font = `bold ${L.narrow ? 12 : 13}px system-ui, sans-serif`
+      ctx.fillStyle = '#ffd24a'
+      const line = `${meLabel} · ${rivalLabel}`
+      // 过长则缩小字号
+      let size = L.narrow ? 12 : 13
+      ctx.font = `bold ${size}px system-ui, sans-serif`
+      while (size > 10 && ctx.measureText(line).width > L.panelW - 16) {
+        size -= 1
+        ctx.font = `bold ${size}px system-ui, sans-serif`
+      }
+      ctx.fillText(line, this.w / 2, y + L.panelH * 0.72)
     } else {
-      ctx.fillText(`${t('math.duel.youBadge')} ${Math.round(this.displayDist)}m`, this.w / 2 - 58, 110)
+      ctx.font = 'bold 18px system-ui, sans-serif'
+      ctx.fillText(`⏱ ${clock}`, this.w / 2, y + 16)
+      ctx.font = 'bold 14px system-ui, sans-serif'
+      ctx.fillStyle = '#ffd24a'
+      ctx.fillText(meLabel, this.w / 2 - 70, y + 38)
       ctx.fillStyle = 'rgba(255,255,255,0.75)'
       ctx.font = '14px system-ui, sans-serif'
-      ctx.fillText(`·  ${t('math.duel.rivalGhost')} ${Math.round(this.displayRival)}m`, this.w / 2 + 52, 110)
+      ctx.fillText(`· ${rivalLabel}`, this.w / 2 + 70, y + 38)
     }
   }
 
-  private drawQuestion(ctx: CanvasRenderingContext2D): void {
+  private drawQuestion(ctx: CanvasRenderingContext2D, L = this.raceLayout()): void {
     if (!this.current) return
-    const y = this.h - 150
+    const y = L.qY
     ctx.fillStyle = 'rgba(20,26,40,0.88)'
-    roundRect(ctx, this.w / 2 - 160, y - 28, 320, 52, 14)
+    roundRect(ctx, this.w / 2 - L.qW / 2, y - L.qH / 2, L.qW, L.qH, 14)
     ctx.fill()
     ctx.fillStyle = '#fff'
-    ctx.font = 'bold 28px system-ui, sans-serif'
+    ctx.font = `bold ${L.qFont}px system-ui, sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     const tail = this.revealed !== null ? this.revealed : '?'
-    ctx.fillText(`${this.current.text} = ${tail}`, this.w / 2, y)
+    const text = `${this.current.text} = ${tail}`
+    // 窄屏防溢出
+    let size = L.qFont
+    while (size > 16 && ctx.measureText(text).width > L.qW - 20) {
+      size -= 1
+      ctx.font = `bold ${size}px system-ui, sans-serif`
+    }
+    ctx.fillText(text, this.w / 2, y)
   }
 
-  private drawChoices(ctx: CanvasRenderingContext2D): void {
+  private drawChoices(ctx: CanvasRenderingContext2D, L = this.raceLayout()): void {
+    const font = L.narrow ? 18 : 22
     for (const c of this.choices) {
       let fill = '#3d7cff'
       if (this.revealed !== null) {
@@ -595,7 +719,7 @@ export class BikeDuelScene implements Scene {
       ctx.lineWidth = 2
       ctx.stroke()
       ctx.fillStyle = '#fff'
-      ctx.font = 'bold 22px system-ui, sans-serif'
+      ctx.font = `bold ${font}px system-ui, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(String(c.value), c.x, c.y + 1)

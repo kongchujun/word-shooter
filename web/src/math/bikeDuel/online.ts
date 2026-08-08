@@ -5,10 +5,19 @@ export const BIKE_RACE_CAPACITY = 5
 export interface BikeSession {
   code: string
   max: number
+  public: boolean
   playerId: string
   token: string
   seat: number
   host: boolean
+}
+
+export interface BikeOpenRoom {
+  code: string
+  max: number
+  playerCount: number
+  capacity: number
+  readyCount: number
 }
 
 export interface BikePlayerView {
@@ -23,6 +32,7 @@ export interface BikePlayerView {
 export interface BikeSyncState {
   code: string
   max: number
+  public: boolean
   status: 'waiting' | 'racing' | 'done' | string
   startAt: number
   countdown: number
@@ -45,8 +55,15 @@ async function post<T>(url: string, body?: unknown): Promise<T> {
   return data
 }
 
-export function createRoom(max: number): Promise<BikeSession> {
-  return post<BikeSession>('/api/bike/rooms', { max })
+export async function listOpenRooms(): Promise<BikeOpenRoom[]> {
+  const res = await fetch('/api/bike/rooms')
+  const data = (await res.json().catch(() => ({}))) as { error?: string; rooms?: BikeOpenRoom[] }
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+  return data.rooms ?? []
+}
+
+export function createRoom(max: number, isPublic = false): Promise<BikeSession> {
+  return post<BikeSession>('/api/bike/rooms', { max, public: isPublic })
 }
 
 export function joinRoom(code: string): Promise<BikeSession> {

@@ -4,7 +4,7 @@ import "testing"
 
 func TestBikeRaceMultiReadyAndSync(t *testing.T) {
 	h := NewBikeRaceHub()
-	room, p1, err := h.Create(100)
+	room, p1, err := h.Create(100, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestBikeRaceMultiReadyAndSync(t *testing.T) {
 
 func TestBikeRaceCapacity(t *testing.T) {
 	h := NewBikeRaceHub()
-	room, _, err := h.Create(50)
+	room, _, err := h.Create(50, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,5 +86,35 @@ func TestBikeRaceCapacity(t *testing.T) {
 	}
 	if _, _, err := h.Join(room.Code); err != ErrRoomFull {
 		t.Fatalf("want full, got %v", err)
+	}
+}
+
+func TestBikeRaceListOpen(t *testing.T) {
+	h := NewBikeRaceHub()
+	pub, host, err := h.Create(100, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	priv, _, err := h.Create(100, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := h.ListOpen()
+	if len(list) != 1 || list[0].Code != pub.Code {
+		t.Fatalf("want only public room, got %#v (priv=%s)", list, priv.Code)
+	}
+	// 开打后不再出现在列表
+	_, p2, err := h.Join(pub.Code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Sync(pub.Code, BikeSyncIn{PlayerID: host.ID, Token: host.Token, Ready: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Sync(pub.Code, BikeSyncIn{PlayerID: p2.ID, Token: p2.Token, Ready: true}); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.ListOpen()) != 0 {
+		t.Fatalf("racing room should leave open list")
 	}
 }

@@ -8,7 +8,9 @@ import {
   BIKE_RACE_CAPACITY,
   createRoom,
   joinRoom,
+  listOpenRooms,
   syncRoom,
+  type BikeOpenRoom,
   type BikeSession,
 } from './bikeDuel/online'
 import { MATH } from './quizTiming'
@@ -100,7 +102,7 @@ export class MathScreens {
     }
   }
 
-  /** 多人踩单车入口:创建/加入房间,最多 5 人 */
+  /** 多人踩单车入口:公开房一键进 / 私密房对房间号,最多 5 人 */
   showBikeOnlineLobby(
     level: BikeLevel,
     handlers: {
@@ -110,14 +112,22 @@ export class MathScreens {
     this.stopLobby()
     this.root.classList.remove('hidden')
     this.root.innerHTML = `
-      <div class="panel menu">
+      <div class="panel menu bike-lobby">
         <div class="logo">🏁</div>
         <h1>${t('math.game.bikeDuel')}</h1>
         <p class="muted">${t('math.duel.lobbyHint')}</p>
         <div class="lobby-block">
-          <button class="btn primary" data-act="create">${t('math.duel.createRoom')}</button>
-          <div class="lobby-or">${t('math.duel.or')}</div>
-          <div class="lobby-join">
+          <div class="lobby-create-row" data-el="gate">
+            <button class="btn primary" data-act="create-public" title="${t('math.duel.createPublicHint')}">${t('math.duel.createPublic')}</button>
+            <button class="btn" data-act="create-private" title="${t('math.duel.createPrivateHint')}">${t('math.duel.createPrivate')}</button>
+          </div>
+          <p class="lobby-hint muted" data-el="gate-hint">${t('math.duel.createPublicHint')}</p>
+          <div class="lobby-open" data-el="gate-open">
+            <div class="lobby-open-title">${t('math.duel.openRooms')}</div>
+            <div class="lobby-open-list" data-el="open-list"></div>
+          </div>
+          <div class="lobby-or" data-el="gate-or">${t('math.duel.joinByCode')}</div>
+          <div class="lobby-join" data-el="gate-join">
             <input class="lobby-input" data-el="code" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="${t('math.duel.codePlaceholder')}" autocomplete="off" />
             <button class="btn" data-act="join">${t('math.duel.joinRoom')}</button>
           </div>
@@ -139,15 +149,22 @@ export class MathScreens {
     const mySeatEl = this.root.querySelector<HTMLElement>('[data-el="my-seat"]')!
     const readyLineEl = this.root.querySelector<HTMLElement>('[data-el="ready-line"]')!
     const playersEl = this.root.querySelector<HTMLElement>('[data-el="players"]')!
+    const openListEl = this.root.querySelector<HTMLElement>('[data-el="open-list"]')!
     const codeInput = this.root.querySelector<HTMLInputElement>('[data-el="code"]')!
     const readyBtn = this.root.querySelector<HTMLButtonElement>('[data-act="ready"]')!
+    const gateEls = this.root.querySelectorAll<HTMLElement>('[data-el^="gate"]')
 
     let session: BikeSession | null = null
     let ready = false
     let starting = false
+    let joining = false
 
     const setStatus = (msg: string) => {
       statusEl.textContent = msg
+    }
+
+    const hideGate = () => {
+      gateEls.forEach((el) => el.classList.add('hidden'))
     }
 
     const renderPlayers = (
@@ -175,10 +192,18 @@ export class MathScreens {
 
     const enterRoom = (s: BikeSession) => {
       session = s
+      hideGate()
       roomEl.classList.remove('hidden')
-      codeShow.textContent = s.code
+      if (s.public) {
+        codeShow.textContent = t('math.duel.publicRoom')
+        codeShow.classList.add('is-public')
+        setStatus(t('math.duel.waitingPublic'))
+      } else {
+        codeShow.textContent = s.code
+        codeShow.classList.remove('is-public')
+        setStatus(t('math.duel.waitingPeer'))
+      }
       mySeatEl.textContent = t('math.duel.yourSeat', { n: s.seat })
-      setStatus(t('math.duel.waitingPeer'))
       renderPlayers([{ seat: s.seat, ready: false, you: true }], 0, 1)
       this.stopLobby()
       this.lobbyTimer = window.setInterval(() => void tick(), 400)
@@ -213,16 +238,64 @@ export class MathScreens {
       }
     }
 
-    this.root.querySelector('[data-act="create"]')!.addEventListener('click', () => {
+    const renderOpenList = (rooms: BikeOpenRoom[]) => {
+      if (!rooms.length) {
+        openListEl.innerHTML = `<p class="lobby-open-empty muted">${t('math.duel.openEmpty')}</p>`
+        return
+      }
+      openListEl.innerHTML = rooms
+        .map(
+          (r) => `
+        <button type="button" class="lobby-open-item" data-act="open-join" data-code="${r.code}">
+          <span class="lobby-open-name">${t('math.duel.publicRoom')}</span>
+          <span class="lobby-open-meta">${t('math.duel.openPlayers', { n: r.playerCount, cap: r.capacity })}</span>
+          <span class="lobby-open-go">${t('math.duel.openJoin')}</span>
+        </button>`,
+        )
+        .join('')
+      openListEl.querySelectorAll<HTMLButtonElement>('[data-act="open-join"]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          void (async () => {
+            if (joining || session) return
+            joining = true
+            setStatus(t('math.duel.joining'))
+            try {
+              enterRoom(await joinRoom(btn.dataset.code || ''))
+            } catch (err) {
+              setStatus(err instanceof Error ? err.message : String(err))
+              joining = false
+              void refreshOpen()
+            }
+          })()
+        })
+      })
+    }
+
+    const refreshOpen = async () => {
+      if (session) return
+      try {
+        renderOpenList(await listOpenRooms())
+      } catch {
+        /* 列表失败不挡开房 */
+      }
+    }
+
+    const doCreate = (isPublic: boolean) => {
       void (async () => {
+        if (joining || session) return
+        joining = true
         setStatus(t('math.duel.creating'))
         try {
-          enterRoom(await createRoom(level.max))
+          enterRoom(await createRoom(level.max, isPublic))
         } catch (err) {
           setStatus(err instanceof Error ? err.message : String(err))
+          joining = false
         }
       })()
-    })
+    }
+
+    this.root.querySelector('[data-act="create-public"]')!.addEventListener('click', () => doCreate(true))
+    this.root.querySelector('[data-act="create-private"]')!.addEventListener('click', () => doCreate(false))
 
     codeInput.addEventListener('input', () => {
       codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, 4)
@@ -230,16 +303,19 @@ export class MathScreens {
 
     this.root.querySelector('[data-act="join"]')!.addEventListener('click', () => {
       void (async () => {
+        if (joining || session) return
         const code = codeInput.value.trim()
         if (code.length !== 4) {
           setStatus(t('math.duel.codeNeeded'))
           return
         }
+        joining = true
         setStatus(t('math.duel.joining'))
         try {
           enterRoom(await joinRoom(code))
         } catch (err) {
           setStatus(err instanceof Error ? err.message : String(err))
+          joining = false
         }
       })()
     })
@@ -251,6 +327,9 @@ export class MathScreens {
       setStatus(t('math.duel.waitBothReady'))
       void tick()
     })
+
+    void refreshOpen()
+    this.lobbyTimer = window.setInterval(() => void refreshOpen(), 1500)
   }
 
   showQuizResult(result: QuizResult, onRetry: () => void, onMenu: () => void): void {

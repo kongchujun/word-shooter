@@ -655,6 +655,106 @@ body.with-sidebar .screen {
   width: min(360px, 100%);
 }
 
+.lobby-create-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.lobby-create-row .btn {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 10px;
+  font-size: 15px;
+}
+
+.lobby-hint {
+  margin: -6px 0 0;
+  font-size: 12px;
+  text-align: center;
+}
+
+.lobby-open {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+}
+
+.lobby-open-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: left;
+}
+
+.lobby-open-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 40px;
+}
+
+.lobby-open-empty {
+  margin: 4px 0;
+  font-size: 13px;
+  text-align: center;
+}
+
+.lobby-open-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(77, 141, 255, 0.35);
+  background: rgba(77, 141, 255, 0.12);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+}
+
+.lobby-open-item:hover {
+  background: rgba(77, 141, 255, 0.22);
+}
+
+.lobby-open-name {
+  font-weight: 800;
+}
+
+.lobby-open-meta {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lobby-open-go {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffd76a;
+}
+
+.lobby-code.is-public {
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  padding-left: 0;
+  color: #9ec8ff;
+}
+
 .lobby-or {
   text-align: center;
   opacity: 0.55;
@@ -784,6 +884,121 @@ body.with-sidebar .screen {
   }
 }
 
+/* 手机竖屏:大厅/结算一屏可滚完,触控区更大 */
+@media (max-width: 560px) and (orientation: portrait) {
+  .screen {
+    place-items: start center;
+    align-content: start;
+    padding: max(12px, env(safe-area-inset-top, 0px)) 12px
+      max(16px, env(safe-area-inset-bottom, 0px));
+  }
+
+  body.with-sidebar .screen {
+    padding-left: calc(var(--bar-w) + 10px);
+    padding-right: 10px;
+  }
+
+  .panel.menu,
+  .panel.result {
+    width: 100%;
+    padding: 18px 14px 16px;
+    border-radius: 18px;
+  }
+
+  .panel.menu .logo {
+    font-size: 40px;
+  }
+
+  .panel.menu h1,
+  .panel.result h1 {
+    font-size: clamp(22px, 6vw, 28px);
+  }
+
+  .lobby-block {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .lobby-create-row {
+    grid-template-columns: 1fr;
+  }
+
+  .lobby-join {
+    flex-direction: column;
+  }
+
+  .lobby-join .btn,
+  .lobby-block > .btn,
+  .lobby-create-row .btn {
+    width: 100%;
+    min-height: 48px;
+    padding: 14px 20px;
+  }
+
+  .lobby-open-item {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+  }
+
+  .lobby-open-go {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+
+  .lobby-input {
+    font-size: 26px;
+    min-height: 48px;
+    letter-spacing: 0.35em;
+  }
+
+  .lobby-code {
+    font-size: clamp(26px, 9vw, 34px);
+  }
+
+  .lobby-players {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .lobby-slot {
+    padding: 6px 2px;
+    font-size: 10px;
+  }
+
+  .lobby-slot b {
+    font-size: 15px;
+  }
+
+  .lobby-slot i {
+    font-size: 9px;
+  }
+
+  .duel-trophy {
+    font-size: 48px;
+  }
+
+  .duel-cheer {
+    font-size: 16px;
+  }
+
+  .duel-result .stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .actions {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .actions .btn {
+    width: 100%;
+    min-height: 48px;
+  }
+}
+
 /* ---------- 战斗 HUD ---------- */
 
 .hud {
@@ -802,6 +1017,44 @@ body.with-sidebar .screen {
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   background: linear-gradient(180deg, rgba(6, 10, 24, 0.82), rgba(6, 10, 24, 0));
   pointer-events: auto;
+}
+
+@media (max-width: 480px) and (orientation: portrait) {
+  .hud {
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    padding: 8px 10px;
+    padding-top: max(8px, env(safe-area-inset-top, 0px));
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+    padding-right: max(10px, env(safe-area-inset-right, 0px));
+  }
+
+  .hud-stat label {
+    font-size: 11px;
+  }
+
+  .hud-stat span {
+    font-size: 16px;
+  }
+
+  .hud-combo {
+    flex: 1 1 100%;
+    order: 5;
+    font-size: 14px;
+    text-align: left;
+    min-height: 1.1em;
+  }
+
+  .hud-quit {
+    height: 40px;
+    padding: 0 12px 0 10px;
+    font-size: 14px;
+  }
+
+  .hud-btn {
+    width: 40px;
+    height: 40px;
+  }
 }
 
 .hud-stat {
