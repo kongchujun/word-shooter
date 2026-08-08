@@ -29,7 +29,16 @@ function nav(): NavItem[] {
   ]
 }
 
-const ALL_IDS: string[] = ['home', 'words', 'math', 'math/mult', 'math/addsub', 'math/balance']
+const ALL_IDS: string[] = [
+  'home',
+  'words',
+  'math',
+  'math/mult',
+  'math/addsub',
+  'math/balance',
+  'math/bike',
+  'math/bike-duel',
+]
 
 /**
  * 左侧导航栏 + 首页面板。各个功能页自己管自己的 DOM,这里只负责切换。

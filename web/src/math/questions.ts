@@ -1,6 +1,8 @@
 import { t } from '../i18n'
 import type { ViewId } from '../shell/routes'
 import { BALANCE_LEVELS, type BalanceLevel } from './balance/levels'
+import { BIKE_LEVELS, type BikeLevel } from './bike/levels'
+import { BIKE_DUEL_LEVELS } from './bikeDuel/levels'
 import { randInt, shuffle } from '../utils/math'
 
 export interface Question {
@@ -45,7 +47,17 @@ export interface BalanceGame extends GameBase {
   levels: BalanceLevel[]
 }
 
-export type MathGame = QuizGame | BalanceGame
+export interface BikeGame extends GameBase {
+  kind: 'bike'
+  levels: BikeLevel[]
+}
+
+export interface BikeDuelGame extends GameBase {
+  kind: 'bikeDuel'
+  levels: BikeLevel[]
+}
+
+export type MathGame = QuizGame | BalanceGame | BikeGame | BikeDuelGame
 
 function multLevels(): QuizLevel[] {
   return [
@@ -98,6 +110,26 @@ export function GAMES(): MathGame[] {
       desc: t('math.game.balance.desc'),
       tip: t('math.tip.balance'),
       levels: BALANCE_LEVELS(),
+    },
+    {
+      kind: 'bike',
+      view: 'math/bike',
+      icon: '🚲',
+      name: t('math.game.bike'),
+      short: t('math.game.bike.short'),
+      desc: t('math.game.bike.desc'),
+      tip: t('math.tip.bike'),
+      levels: BIKE_LEVELS(),
+    },
+    {
+      kind: 'bikeDuel',
+      view: 'math/bike-duel',
+      icon: '🏁',
+      name: t('math.game.bikeDuel'),
+      short: t('math.game.bikeDuel.short'),
+      desc: t('math.game.bikeDuel.desc'),
+      tip: t('math.tip.bikeDuel'),
+      levels: BIKE_DUEL_LEVELS(),
     },
   ]
 }

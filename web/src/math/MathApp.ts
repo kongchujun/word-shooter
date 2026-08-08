@@ -1,7 +1,12 @@
 import type { Engine, Scene } from '../core/Engine'
+import { t } from '../i18n'
+import { GhostStore } from '../systems/GhostStore'
 import { HUD } from '../ui/HUD'
 import { BalanceScene, type BalanceResult } from './balance/BalanceScene'
 import type { BalanceLevel } from './balance/levels'
+import type { BikeLevel } from './bike/levels'
+import { BikeDuelScene, type BikeDuelOpts, type BikeDuelResult } from './bikeDuel/BikeDuelScene'
+import { bikeDuelLevel } from './bikeDuel/levels'
 import { MathScreens } from './MathScreens'
 import { QuizScene } from './QuizScene'
 import type { LevelInfo, MathGame, QuizLevel } from './questions'
@@ -9,7 +14,7 @@ import type { QuizResult } from './types'
 
 /**
  * 数学侧的应用外壳,和 Game 同构:自己一份 HUD 和面板,
- * 真正开打时把场景交给共用的 Engine。quiz / balance 两种玩法都走这里。
+ * 真正开打时把场景交给共用的 Engine。
  */
 export class MathApp {
   private hud: HUD
@@ -17,7 +22,6 @@ export class MathApp {
   private play: Scene | null = null
   private game: MathGame | null = null
 
-  /** 真正开打/收工时通知外壳,用来收放侧栏 */
   onPlaying: (playing: boolean) => void = () => {}
 
   constructor(
@@ -30,16 +34,13 @@ export class MathApp {
     this.screens = new MathScreens(ui)
 
     window.addEventListener('keydown', (e) => {
-      // 单词射击也在同一块 canvas 上跑,只认自己的场景在台上的时候
       if (!this.play || this.engine.active !== this.play) return
       if (e.code === 'Escape') this.quitToMenu()
     })
 
-    // dev 下挂个调试入口
     if (import.meta.env.DEV) (window as unknown as { __math: MathApp }).__math = this
   }
 
-  /** 仅调试用:射击题看靶子;天平看当前目标和左盘 */
   debugTargets(): { n: number; x: number; y: number; correct: boolean }[] {
     if (this.play instanceof QuizScene) return this.play.debugTargets()
     return []
@@ -58,6 +59,11 @@ export class MathApp {
   enter(game: MathGame): void {
     this.teardownPlay()
     this.game = game
+    // 多人:点侧栏就进开房/加入
+    if (game.kind === 'bikeDuel') {
+      this.openOnlineLobby()
+      return
+    }
     this.screens.showMenu(game, (lv) => this.startLevel(lv))
   }
 
@@ -68,28 +74,59 @@ export class MathApp {
   }
 
   private startLevel(level: LevelInfo): void {
-    if (!this.game) return
-    // 必须在点击的同步调用栈里解锁,否则 iOS 全程没声音。
-    this.engine.audio.unlock()
+    if (!this.game || this.game.kind === 'bikeDuel') return
 
+    if (this.game.kind === 'bike') {
+      const bikeLevel = level as BikeLevel
+      const ghost = GhostStore.getForMax(bikeLevel.max) ?? null
+      this.launchDuel(bikeLevel, { mode: 'ghost', ghost })
+      return
+    }
+
+    this.engine.audio.unlock()
     this.screens.hideAll()
     this.hud.setScore(0)
     this.hud.setCombo(0)
     this.hud.show()
 
     if (this.game.kind === 'quiz') {
+      this.hud.setStatLabels(t('game.hud.score'), t('game.hud.round'))
       const quizLevel = level as QuizLevel
       const play = new QuizScene(this.engine, this.hud, quizLevel, (r) => this.finishQuiz(r))
       this.play = play
       this.engine.setScene(play)
       play.start()
     } else {
+      this.hud.setStatLabels(t('game.hud.score'), t('game.hud.round'))
       const balLevel = level as BalanceLevel
       const play = new BalanceScene(this.engine, this.hud, balLevel, (r) => this.finishBalance(r))
       this.play = play
       this.engine.setScene(play)
       play.start()
     }
+    this.onPlaying(true)
+  }
+
+  private openOnlineLobby(): void {
+    const level = bikeDuelLevel()
+    this.screens.showBikeOnlineLobby(level, {
+      onStart: (session, startAt) => {
+        this.launchDuel(level, { mode: 'online', online: session, startAt })
+      },
+    })
+  }
+
+  private launchDuel(level: BikeLevel, opts: BikeDuelOpts): void {
+    this.engine.audio.unlock()
+    this.screens.hideAll()
+    this.hud.setStatLabels(t('game.hud.distance'), t('game.hud.timeLeft'))
+    this.hud.setScore(0)
+    this.hud.setCombo(0)
+    this.hud.show()
+    const play = new BikeDuelScene(this.engine, this.hud, level, opts, (r) => this.finishBikeDuel(r))
+    this.play = play
+    this.engine.setScene(play)
+    play.start()
     this.onPlaying(true)
   }
 
@@ -109,6 +146,16 @@ export class MathApp {
       () => this.startLevel(result.level),
       () => this.quitToMenu(),
     )
+  }
+
+  private finishBikeDuel(result: BikeDuelResult): void {
+    this.teardownPlay()
+    if (result.mode === 'online' && result.outcome === 'win') {
+      this.engine.audio.playSfx('levelup')
+    }
+    const retry =
+      this.game?.kind === 'bike' ? () => this.startLevel(result.level) : () => this.openOnlineLobby()
+    this.screens.showBikeDuelResult(result, retry, () => this.quitToMenu())
   }
 
   private quitToMenu(): void {

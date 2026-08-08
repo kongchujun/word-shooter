@@ -66,6 +66,9 @@ body {
   flex-direction: column;
   gap: 6px;
   padding: 18px 12px;
+  padding-top: max(18px, env(safe-area-inset-top, 0px));
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
   border-right: 1px solid var(--line);
   background: rgba(8, 12, 30, 0.92);
   backdrop-filter: blur(8px);
@@ -303,6 +306,257 @@ body.with-sidebar .screen {
   font-weight: 700;
 }
 
+/* 双人踩单车:胜 / 负 / 平 各一套结算气质 */
+.duel-result .duel-badge {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.duel-result .duel-sub {
+  margin: -4px 0 0;
+}
+
+.duel-result .duel-headline {
+  margin: 18px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.duel-result.win {
+  box-shadow: 0 0 0 1px rgba(255, 196, 80, 0.35), 0 18px 50px rgba(255, 180, 40, 0.18);
+}
+
+.duel-result.win .duel-badge {
+  background: linear-gradient(180deg, #ffe08a, #f0b429);
+  color: #3a2a00;
+}
+
+.duel-result.win h1,
+.duel-result.win .duel-headline {
+  color: #ffd76a;
+}
+
+.duel-result.lose {
+  box-shadow: 0 0 0 1px rgba(120, 140, 180, 0.35), 0 18px 50px rgba(20, 30, 50, 0.35);
+}
+
+.duel-result.lose .duel-badge {
+  background: rgba(120, 140, 170, 0.35);
+  color: #d7e0f0;
+}
+
+.duel-result.lose h1,
+.duel-result.lose .duel-headline {
+  color: #b8c4d8;
+}
+
+.duel-result.tie .duel-badge {
+  background: rgba(120, 180, 255, 0.28);
+  color: #d8ecff;
+}
+
+.duel-result.tie h1,
+.duel-result.tie .duel-headline {
+  color: #9ec8ff;
+}
+
+/* ---------- 双人胜利:烟花 + 浮夸结算 ---------- */
+
+.fireworks-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.duel-celebrate {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.duel-rays {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: min(140vw, 920px);
+  height: min(140vw, 920px);
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 215, 90, 0.22),
+    transparent 8%,
+    rgba(255, 120, 80, 0.16),
+    transparent 20%,
+    rgba(120, 200, 255, 0.18),
+    transparent 32%,
+    rgba(255, 215, 90, 0.22),
+    transparent 45%,
+    rgba(255, 100, 180, 0.14),
+    transparent 58%,
+    rgba(120, 255, 180, 0.12),
+    transparent 72%,
+    rgba(255, 215, 90, 0.2),
+    transparent 88%,
+    rgba(255, 215, 90, 0.22)
+  );
+  animation: duel-spin 14s linear infinite;
+  opacity: 0.85;
+  mask-image: radial-gradient(circle, #000 0%, transparent 68%);
+}
+
+.duel-sparkles {
+  position: absolute;
+  inset: 0;
+}
+
+.duel-sparkles i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffe08a;
+  box-shadow: 0 0 10px #ffd76a;
+  animation: duel-twinkle 1.4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.08s);
+}
+
+.duel-sparkles i:nth-child(3n) {
+  background: #ff8ec8;
+  box-shadow: 0 0 10px #ff8ec8;
+}
+
+.duel-sparkles i:nth-child(3n + 1) {
+  background: #8ecbff;
+  box-shadow: 0 0 10px #8ecbff;
+}
+
+.duel-sparkles i:nth-child(1) { left: 8%; top: 12%; }
+.duel-sparkles i:nth-child(2) { left: 18%; top: 28%; }
+.duel-sparkles i:nth-child(3) { left: 28%; top: 16%; }
+.duel-sparkles i:nth-child(4) { left: 38%; top: 34%; }
+.duel-sparkles i:nth-child(5) { left: 48%; top: 10%; }
+.duel-sparkles i:nth-child(6) { left: 58%; top: 30%; }
+.duel-sparkles i:nth-child(7) { left: 68%; top: 14%; }
+.duel-sparkles i:nth-child(8) { left: 78%; top: 36%; }
+.duel-sparkles i:nth-child(9) { left: 88%; top: 18%; }
+.duel-sparkles i:nth-child(10) { left: 12%; top: 62%; }
+.duel-sparkles i:nth-child(11) { left: 22%; top: 74%; }
+.duel-sparkles i:nth-child(12) { left: 34%; top: 68%; }
+.duel-sparkles i:nth-child(13) { left: 46%; top: 78%; }
+.duel-sparkles i:nth-child(14) { left: 56%; top: 64%; }
+.duel-sparkles i:nth-child(15) { left: 66%; top: 76%; }
+.duel-sparkles i:nth-child(16) { left: 76%; top: 70%; }
+.duel-sparkles i:nth-child(17) { left: 86%; top: 80%; }
+.duel-sparkles i:nth-child(18) { left: 94%; top: 58%; }
+
+.duel-result.celebrate {
+  position: relative;
+  z-index: 2;
+  animation: duel-pop 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  box-shadow:
+    0 0 0 2px rgba(255, 210, 90, 0.55),
+    0 0 40px rgba(255, 180, 40, 0.45),
+    0 24px 60px rgba(255, 160, 20, 0.28);
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(255, 210, 100, 0.28), transparent 55%),
+    var(--panel);
+}
+
+.duel-result.online-win h1 {
+  font-size: clamp(32px, 6vw, 44px);
+  background: linear-gradient(180deg, #fff6c8, #ffb02e 55%, #ff7a18);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 12px rgba(255, 180, 40, 0.55));
+  animation: duel-title-glow 1.6s ease-in-out infinite alternate;
+}
+
+.duel-trophy {
+  font-size: 64px;
+  line-height: 1;
+  margin-bottom: 4px;
+  animation: duel-trophy-bounce 1.1s ease-in-out infinite;
+  filter: drop-shadow(0 6px 16px rgba(255, 190, 40, 0.55));
+}
+
+.duel-cheer {
+  margin: 10px 0 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffe08a;
+  text-shadow: 0 0 18px rgba(255, 200, 80, 0.55);
+  animation: duel-cheer-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes duel-spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes duel-twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+@keyframes duel-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.82) translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes duel-trophy-bounce {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) rotate(4deg) scale(1.08);
+  }
+}
+
+@keyframes duel-title-glow {
+  from {
+    filter: drop-shadow(0 2px 8px rgba(255, 180, 40, 0.4));
+  }
+  to {
+    filter: drop-shadow(0 2px 18px rgba(255, 220, 100, 0.85));
+  }
+}
+
+@keyframes duel-cheer-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
 .wrong {
   margin-top: 18px;
   text-align: left;
@@ -390,6 +644,146 @@ body.with-sidebar .screen {
   filter: brightness(1.1);
 }
 
+/* ---------- 双人踩单车大厅 ---------- */
+
+.lobby-block {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  margin-top: 8px;
+  width: min(360px, 100%);
+}
+
+.lobby-or {
+  text-align: center;
+  opacity: 0.55;
+  font-size: 13px;
+}
+
+.lobby-join {
+  display: flex;
+  gap: 8px;
+}
+
+.lobby-input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--ink);
+  font: inherit;
+  font-size: 22px;
+  letter-spacing: 0.28em;
+  text-align: center;
+}
+
+.lobby-status {
+  min-height: 1.4em;
+  margin: 0;
+  text-align: center;
+}
+
+.lobby-room {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.lobby-room.hidden {
+  display: none;
+}
+
+.lobby-code {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  padding-left: 0.28em;
+}
+
+.lobby-seat {
+  margin: 0;
+  font-weight: 700;
+  color: #ffd76a;
+}
+
+.lobby-ready-line {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lobby-players {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.lobby-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+}
+
+.lobby-slot b {
+  font-size: 18px;
+}
+
+.lobby-slot i {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.lobby-slot.empty {
+  opacity: 0.4;
+}
+
+.lobby-slot.me {
+  border-color: rgba(77, 141, 255, 0.7);
+  background: rgba(77, 141, 255, 0.18);
+}
+
+.lobby-slot.ready {
+  border-color: rgba(46, 204, 113, 0.55);
+}
+
+.lobby-slot.ready i {
+  color: #7dffa8;
+}
+
+.result-standings {
+  margin-top: 14px;
+}
+
+.duel-winner-num {
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: 900;
+  color: #ffd76a;
+  text-shadow: 0 0 20px rgba(255, 200, 80, 0.45);
+  margin-bottom: 6px;
+}
+
+@media (max-width: 560px) {
+  .lobby-players {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 /* ---------- 战斗 HUD ---------- */
 
 .hud {
@@ -397,12 +791,17 @@ body.with-sidebar .screen {
   top: 0;
   left: 0;
   right: 0;
+  /* 盖过侧栏/画布;iPad 横屏摄像头开孔也要躲开 */
+  z-index: 20;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   padding: 12px 16px;
-  padding-top: max(12px, env(safe-area-inset-top));
-  background: linear-gradient(180deg, rgba(6, 10, 24, 0.75), rgba(6, 10, 24, 0));
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: linear-gradient(180deg, rgba(6, 10, 24, 0.82), rgba(6, 10, 24, 0));
+  pointer-events: auto;
 }
 
 .hud-stat {
@@ -446,10 +845,40 @@ body.with-sidebar .screen {
   color: var(--ink);
   font-size: 19px;
   cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
 }
 
 .hud-btn:hover {
   background: rgba(255, 255, 255, 0.16);
+}
+
+/* 开打后侧栏会收起,返回键是唯一出口 —— 做成带字的胶囊,平板上也好认 */
+.hud-quit {
+  width: auto;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 14px 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(20, 28, 52, 0.88);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.hud-quit-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.hud-quit-label {
+  line-height: 1;
 }
 
 .hud-replay {

@@ -33,6 +33,7 @@ type Server struct {
 	words    *store.WordStore
 	access   *store.AccessStore
 	geo      *geoip.Lookup
+	bike     *store.BikeRaceHub
 
 	openRouter *media.Client
 	tts        *media.TTS
@@ -52,6 +53,7 @@ func New(d Deps) *Server {
 		words:      d.Words,
 		access:     d.Access,
 		geo:        d.Geo,
+		bike:       store.NewBikeRaceHub(),
 		openRouter: or,
 		tts:        media.NewTTS(or, az),
 		auth:       newAuth(d.Config.AdminUser, d.Config.AdminPass),
@@ -81,6 +83,9 @@ func (s *Server) registerRoutes(e *gin.Engine) {
 	e.GET("/api/words/manifest", s.handleManifest)
 	// 旧路径。服务器上那份 deploy.sh 拿它做启动健康检查,等各处脚本都换新了再删。
 	e.GET("/api/manifest", s.handleManifest)
+
+	// 双人踩单车房间(内存,短轮询)
+	s.registerBikeRace(e)
 
 	admin := e.Group("/api/admin")
 	{

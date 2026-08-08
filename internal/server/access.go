@@ -14,7 +14,7 @@ import (
 
 // 这些不记:图片音频和前端静态资源,一局游戏能刷出几十条,
 // 记了反而看不清"谁在用"。
-var skipPrefixes = []string{"/assets/", "/static/", "/favicon"}
+var skipPrefixes = []string{"/assets/", "/static/", "/favicon", "/api/bike/"}
 
 // 后台自己查日志的请求也不记,免得越刷越多
 const accessAPIPath = "/api/admin/access"
