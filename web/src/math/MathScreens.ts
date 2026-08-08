@@ -8,6 +8,7 @@ import {
   BIKE_RACE_CAPACITY,
   createRoom,
   joinRoom,
+  leaveRoom,
   listOpenRooms,
   syncRoom,
   type BikeOpenRoom,
@@ -23,6 +24,8 @@ export class MathScreens {
   private root: HTMLDivElement
   private lobbyTimer: number | null = null
   private stopFx: (() => void) | null = null
+  /** 大厅里占着的座位;切侧栏时要 leave,开打时交给场景 */
+  private lobbySession: BikeSession | null = null
 
   constructor(parent: HTMLElement) {
     this.root = document.createElement('div')
@@ -30,11 +33,17 @@ export class MathScreens {
     parent.appendChild(this.root)
   }
 
-  hideAll(): void {
-    this.stopLobby()
+  async hideAll(): Promise<void> {
+    await this.abandonLobby()
     this.clearFx()
     this.root.classList.add('hidden')
     this.root.innerHTML = ''
+  }
+
+  /** 开打前调用:保留座位,不再由大厅负责 leave */
+  releaseLobbySession(): void {
+    this.lobbySession = null
+    this.stopLobby()
   }
 
   private clearFx(): void {
@@ -47,6 +56,13 @@ export class MathScreens {
       window.clearInterval(this.lobbyTimer)
       this.lobbyTimer = null
     }
+  }
+
+  private async abandonLobby(): Promise<void> {
+    this.stopLobby()
+    const s = this.lobbySession
+    this.lobbySession = null
+    if (s) await leaveRoom(s)
   }
 
   showMenu(game: MathGame, onPick: (level: LevelInfo) => void): void {
@@ -109,7 +125,7 @@ export class MathScreens {
       onStart: (session: BikeSession, startAt: number) => void
     },
   ): void {
-    this.stopLobby()
+    void this.abandonLobby()
     this.root.classList.remove('hidden')
     this.root.innerHTML = `
       <div class="panel menu bike-lobby">
@@ -192,6 +208,7 @@ export class MathScreens {
 
     const enterRoom = (s: BikeSession) => {
       session = s
+      this.lobbySession = s
       hideGate()
       roomEl.classList.remove('hidden')
       if (s.public) {
@@ -229,9 +246,10 @@ export class MathScreens {
         }
         if (st.status === 'racing' && st.startAt > 0) {
           starting = true
-          this.stopLobby()
+          const startingSession = session
+          this.releaseLobbySession()
           setStatus(t('math.duel.starting'))
-          handlers.onStart(session, st.startAt)
+          handlers.onStart(startingSession, st.startAt)
         }
       } catch (err) {
         setStatus(err instanceof Error ? err.message : String(err))

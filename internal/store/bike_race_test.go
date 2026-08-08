@@ -89,6 +89,43 @@ func TestBikeRaceCapacity(t *testing.T) {
 	}
 }
 
+func TestBikeRaceLeaveClearsSeat(t *testing.T) {
+	h := NewBikeRaceHub()
+	room, host, err := h.Create(100, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Leave(room.Code, host.ID, host.Token); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.ListOpen()) != 0 {
+		t.Fatalf("empty public room should disappear")
+	}
+	room2, host2, err := h.Create(100, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, guest, err := h.Join(room2.Code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Leave(room2.Code, host2.ID, host2.Token); err != nil {
+		t.Fatal(err)
+	}
+	list := h.ListOpen()
+	if len(list) != 1 || list[0].PlayerCount != 1 {
+		t.Fatalf("want 1 remaining, got %#v", list)
+	}
+	// 离开后再进应能拿到空出来的 1 号座
+	_, again, err := h.Join(room2.Code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Seat != 1 {
+		t.Fatalf("want seat 1, got %d (guest was %d)", again.Seat, guest.Seat)
+	}
+}
+
 func TestBikeRaceListOpen(t *testing.T) {
 	h := NewBikeRaceHub()
 	pub, host, err := h.Create(100, true)

@@ -6,6 +6,7 @@ import { BalanceScene, type BalanceResult } from './balance/BalanceScene'
 import type { BalanceLevel } from './balance/levels'
 import type { BikeLevel } from './bike/levels'
 import { BikeDuelScene, type BikeDuelOpts, type BikeDuelResult } from './bikeDuel/BikeDuelScene'
+import { leaveRoom, type BikeSession } from './bikeDuel/online'
 import { bikeDuelLevel } from './bikeDuel/levels'
 import { MathScreens } from './MathScreens'
 import { QuizScene } from './QuizScene'
@@ -21,6 +22,9 @@ export class MathApp {
   private screens: MathScreens
   private play: Scene | null = null
   private game: MathGame | null = null
+  /** 比赛中的在线会话;中途退出要 leave */
+  private onlineSession: BikeSession | null = null
+  private onlineFinished = false
 
   onPlaying: (playing: boolean) => void = () => {}
 
@@ -30,12 +34,12 @@ export class MathApp {
   ) {
     this.hud = new HUD(ui)
     this.hud.setReplayVisible(false)
-    this.hud.onQuit = () => this.quitToMenu()
+    this.hud.onQuit = () => void this.quitToMenu()
     this.screens = new MathScreens(ui)
 
     window.addEventListener('keydown', (e) => {
       if (!this.play || this.engine.active !== this.play) return
-      if (e.code === 'Escape') this.quitToMenu()
+      if (e.code === 'Escape') void this.quitToMenu()
     })
 
     if (import.meta.env.DEV) (window as unknown as { __math: MathApp }).__math = this
@@ -57,7 +61,7 @@ export class MathApp {
   }
 
   enter(game: MathGame): void {
-    this.teardownPlay()
+    void this.teardownPlay()
     this.game = game
     // 多人:点侧栏就进开房/加入
     if (game.kind === 'bikeDuel') {
@@ -67,9 +71,9 @@ export class MathApp {
     this.screens.showMenu(game, (lv) => this.startLevel(lv))
   }
 
-  leave(): void {
-    this.teardownPlay()
-    this.screens.hideAll()
+  async leave(): Promise<void> {
+    await this.teardownPlay()
+    await this.screens.hideAll()
     this.hud.hide()
   }
 
@@ -118,7 +122,10 @@ export class MathApp {
 
   private launchDuel(level: BikeLevel, opts: BikeDuelOpts): void {
     this.engine.audio.unlock()
-    this.screens.hideAll()
+    this.screens.releaseLobbySession()
+    void this.screens.hideAll()
+    this.onlineSession = opts.mode === 'online' ? opts.online ?? null : null
+    this.onlineFinished = false
     this.hud.setStatLabels(t('game.hud.distance'), t('game.hud.timeLeft'))
     this.hud.setScore(0)
     this.hud.setCombo(0)
@@ -149,24 +156,33 @@ export class MathApp {
   }
 
   private finishBikeDuel(result: BikeDuelResult): void {
-    this.teardownPlay()
+    this.onlineFinished = true
+    this.onlineSession = null
+    void this.teardownPlay()
     if (result.mode === 'online' && result.outcome === 'win') {
       this.engine.audio.playSfx('levelup')
     }
     const retry =
       this.game?.kind === 'bike' ? () => this.startLevel(result.level) : () => this.openOnlineLobby()
-    this.screens.showBikeDuelResult(result, retry, () => this.quitToMenu())
+    this.screens.showBikeDuelResult(result, retry, () => void this.quitToMenu())
   }
 
-  private quitToMenu(): void {
-    if (this.game) this.enter(this.game)
+  private async quitToMenu(): Promise<void> {
+    if (this.game) {
+      await this.leave()
+      this.enter(this.game)
+    }
   }
 
-  private teardownPlay(): void {
+  private async teardownPlay(): Promise<void> {
     const wasPlaying = this.play !== null
+    const abandon = !this.onlineFinished ? this.onlineSession : null
+    this.onlineSession = null
+    this.onlineFinished = false
     this.engine.clearScene(this.play)
     this.play = null
     this.hud.hide()
     if (wasPlaying) this.onPlaying(false)
+    if (abandon) await leaveRoom(abandon)
   }
 }

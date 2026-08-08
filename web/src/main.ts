@@ -30,12 +30,15 @@ shell.onNavigate = (view) => {
 
   if (view !== 'words') game.leave()
   if (view !== 'math') mathHome.hide()
-  if (!quiz) mathApp.leave()
   shell.setBarVisible(true)
 
-  if (view === 'words') void game.enter()
-  if (view === 'math') mathHome.show()
-  if (quiz) mathApp.enter(quiz)
+  // 先等多人房 leave 完成,再进新页,避免幽灵座位还占着
+  void (async () => {
+    await mathApp.leave()
+    if (view === 'words') void game.enter()
+    if (view === 'math') mathHome.show()
+    if (quiz) mathApp.enter(quiz)
+  })()
 }
 
 shell.start()

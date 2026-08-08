@@ -11,6 +11,9 @@ import (
 
 const BikeRaceCapacity = 5
 
+// 大厅里超过这么久没 sync,当作已离开(关页/切侧栏漏调 leave 时的兜底)
+const bikeStaleWaiting = 6 * time.Second
+
 var (
 	ErrRoomNotFound = errors.New("房间不存在或已过期")
 	ErrRoomFull     = errors.New("房间已满")
@@ -61,11 +64,12 @@ func NewBikeRaceHub() *BikeRaceHub {
 }
 
 func (h *BikeRaceHub) loop() {
-	t := time.NewTicker(30 * time.Second)
+	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
 	for range t.C {
 		h.mu.Lock()
 		now := time.Now()
+		h.pruneStaleLocked(now)
 		for code, r := range h.rooms {
 			idle := now.Sub(r.CreatedAt) > 15*time.Minute
 			if r.Status == "done" && now.Sub(r.CreatedAt) > 5*time.Minute {
@@ -100,10 +104,32 @@ func (h *BikeRaceHub) Create(max int, public bool) (*BikeRoom, *BikePlayer, erro
 	return room, host, nil
 }
 
+// Leave 主动离房:大厅切走/中途退出。房空则删掉。
+func (h *BikeRaceHub) Leave(code, playerID, token string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	room := h.rooms[normalize(code)]
+	if room == nil {
+		return nil
+	}
+	me := room.find(playerID, token)
+	if me == nil {
+		return nil
+	}
+	room.removePlayer(me.ID)
+	if len(room.Players) == 0 {
+		delete(h.rooms, room.Code)
+		return nil
+	}
+	h.cancelStartIfNeededLocked(room)
+	return nil
+}
+
 // ListOpen 返回仍在等人的公开房(未满、未开打)。
 func (h *BikeRaceHub) ListOpen() []BikeOpenRoom {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.pruneStaleLocked(time.Now())
 	out := make([]BikeOpenRoom, 0)
 	for _, r := range h.rooms {
 		if !r.Public || r.Status != "waiting" {
@@ -192,6 +218,7 @@ type BikeView struct {
 func (h *BikeRaceHub) Sync(code string, in BikeSyncIn) (*BikeSyncOut, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.pruneStaleLocked(time.Now())
 	room := h.rooms[normalize(code)]
 	if room == nil {
 		return nil, ErrRoomNotFound
@@ -268,6 +295,56 @@ func (r *BikeRoom) find(id, token string) *BikePlayer {
 		}
 	}
 	return nil
+}
+
+func (r *BikeRoom) removePlayer(id string) {
+	kept := make([]*BikePlayer, 0, len(r.Players))
+	for _, p := range r.Players {
+		if p.ID != id {
+			kept = append(kept, p)
+		}
+	}
+	r.Players = kept
+}
+
+// 等人阶段掉线的座位清掉;倒计时中人不够则取消开打。
+func (h *BikeRaceHub) pruneStaleLocked(now time.Time) {
+	for code, r := range h.rooms {
+		if r.Status != "waiting" {
+			// 倒计时还没真正开跑时,掉线也按大厅处理
+			if !(r.Status == "racing" && !r.StartAt.IsZero() && now.Before(r.StartAt)) {
+				continue
+			}
+		}
+		kept := make([]*BikePlayer, 0, len(r.Players))
+		for _, p := range r.Players {
+			if now.Sub(p.Updated) <= bikeStaleWaiting {
+				kept = append(kept, p)
+			}
+		}
+		if len(kept) == len(r.Players) {
+			continue
+		}
+		r.Players = kept
+		if len(r.Players) == 0 {
+			delete(h.rooms, code)
+			continue
+		}
+		h.cancelStartIfNeededLocked(r)
+	}
+}
+
+func (h *BikeRaceHub) cancelStartIfNeededLocked(room *BikeRoom) {
+	if room.Status != "racing" || room.StartAt.IsZero() {
+		return
+	}
+	if !time.Now().Before(room.StartAt) {
+		return
+	}
+	if len(room.Players) < 2 || !room.allReady() {
+		room.Status = "waiting"
+		room.StartAt = time.Time{}
+	}
 }
 
 func (r *BikeRoom) nextSeat() int {

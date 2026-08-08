@@ -83,3 +83,15 @@ export function syncRoom(
     finished: !!patch.finished,
   })
 }
+
+/** 离开房间(大厅切走 / 中途退出)。失败忽略,服务端还有掉线清理。 */
+export async function leaveRoom(session: BikeSession): Promise<void> {
+  try {
+    await post<{ ok: boolean }>(`/api/bike/rooms/${encodeURIComponent(session.code)}/leave`, {
+      playerId: session.playerId,
+      token: session.token,
+    })
+  } catch {
+    /* 房间已没了也没关系 */
+  }
+}

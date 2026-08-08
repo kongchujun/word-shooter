@@ -16,6 +16,7 @@ func (s *Server) registerBikeRace(e *gin.Engine) {
 		g.POST("/rooms", s.handleBikeCreate)
 		g.POST("/rooms/:code/join", s.handleBikeJoin)
 		g.POST("/rooms/:code/sync", s.handleBikeSync)
+		g.POST("/rooms/:code/leave", s.handleBikeLeave)
 	}
 }
 
@@ -95,6 +96,19 @@ func (s *Server) handleBikeSync(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, out)
+}
+
+func (s *Server) handleBikeLeave(c *gin.Context) {
+	var body bikeAuthBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		abortJSON(c, http.StatusBadRequest, "参数不对")
+		return
+	}
+	if err := s.bike.Leave(c.Param("code"), body.PlayerID, body.Token); err != nil {
+		bikeErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func bikeErr(c *gin.Context, err error) {
