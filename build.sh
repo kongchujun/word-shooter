@@ -3,6 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+./scripts/fetch-geoip.sh
+
 echo "==> 构建前端"
 npm --prefix web install --silent
 npm --prefix web run build

@@ -204,7 +204,9 @@ func truncate(s string, n int) string {
 type ipStat struct {
 	IP string `json:"ip"`
 	/** 局域网还是公网 —— 判断"是不是外人"最直接的一条 */
-	Private  bool      `json:"private"`
+	Private bool `json:"private"`
+	/** 归属地,离线库查的;内网和查不到的为空 */
+	Region   string    `json:"region,omitempty"`
 	Count    int       `json:"count"`
 	Errors   int       `json:"errors"`
 	Device   string    `json:"device"`
@@ -220,6 +222,8 @@ type accessSummary struct {
 	Days     int           `json:"days"`
 	KeepDays int           `json:"keepDays"`
 	Dir      string        `json:"dir"`
+	/** 有没有内置归属地库,前端据此决定要不要显示那一列 */
+	Geo bool `json:"geo"`
 }
 
 func (a *accessLog) summary(days, recentLimit int) accessSummary {
@@ -258,6 +262,8 @@ func (a *accessLog) summary(days, recentLimit int) accessSummary {
 		if s.Device == "" {
 			s.Device = "未知"
 		}
+		// 只查公网 —— 内网地址没有归属地可言。查询是本地的,不外发。
+		s.Region = regionOf(s.IP)
 		ips = append(ips, *s)
 	}
 	// 最近来过的排前面
@@ -280,6 +286,7 @@ func (a *accessLog) summary(days, recentLimit int) accessSummary {
 		Days:     days,
 		KeepDays: a.keepDays,
 		Dir:      a.dir,
+		Geo:      geoReady(),
 	}
 }
 

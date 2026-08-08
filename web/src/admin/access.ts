@@ -47,10 +47,11 @@ export function renderAccess(root: HTMLElement, _state: State, _refresh: () => P
       <div class="table-wrap">
         <table class="tbl">
           <thead><tr>
-            <th>IP</th><th>来源</th><th>设备</th><th class="num">请求</th><th class="num">出错</th>
+            <th>IP</th><th>来源</th>${d.geo ? '<th>归属地</th>' : ''}<th>设备</th>
+            <th class="num">请求</th><th class="num">出错</th>
             <th>最近访问</th><th>最近页面</th><th>首次</th>
           </tr></thead>
-          <tbody>${d.ips.map(ipRow).join('')}</tbody>
+          <tbody>${d.ips.map((s) => ipRow(s, d.geo)).join('')}</tbody>
         </table>
       </div>
 
@@ -63,16 +64,20 @@ export function renderAccess(root: HTMLElement, _state: State, _refresh: () => P
       </div>
       <p class="muted" style="margin-top:14px">
         日志目录 <code>${escapeHtml(d.dir)}</code> · 图片音频和前端静态资源不记录,否则一局游戏就能刷出几十条
+        ${d.geo ? '<br />归属地用内置的离线库查(ip2region),不会把 IP 发给任何第三方' : '<br />这个版本没有内置归属地库,只显示 IP'}
       </p>`
   }
 
-  function ipRow(s: IpStat): string {
+  function ipRow(s: IpStat, geo: boolean): string {
     const src = s.private
       ? '<span class="chip">局域网</span>'
       : '<span class="chip warn">公网</span>'
+    // 内网没有归属地可言,查不到的也留空,别拿「未知」占地方
+    const region = geo ? `<td>${s.region ? escapeHtml(s.region) : '<span class="muted">—</span>'}</td>` : ''
     return `<tr>
       <td class="mono">${escapeHtml(s.ip)}</td>
       <td>${src}</td>
+      ${region}
       <td>${escapeHtml(s.device)}</td>
       <td class="num">${s.count}</td>
       <td class="num ${s.errors > 0 ? 'bad' : ''}">${s.errors || '—'}</td>

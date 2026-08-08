@@ -84,6 +84,8 @@ export interface IpStat {
   ip: string
   /** 局域网(含回环)还是公网 —— 判断是不是外人最直接的一条 */
   private: boolean
+  /** 归属地,离线库查的;内网和查不到的为空 */
+  region?: string
   count: number
   errors: number
   device: string
@@ -99,6 +101,8 @@ export interface AccessSummary {
   days: number
   keepDays: number
   dir: string
+  /** 后端有没有内置归属地库 */
+  geo: boolean
 }
 
 export interface GenResult {

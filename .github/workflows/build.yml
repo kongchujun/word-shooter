@@ -22,6 +22,10 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # 11MB 的数据文件不进仓库,构建前拉一次。拉不到不算失败,只是这版没有归属地。
+      - name: 下载 IP 归属地库
+        run: ./scripts/fetch-geoip.sh
+
       # tsc 在这一步会做类型检查,类型错了就不会发出坏包
       - name: 构建前端
         run: |
