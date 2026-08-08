@@ -1,4 +1,6 @@
-package main
+// Package config 负责进程启动时的配置:.env 加载、只读的 Config,
+// 以及后台可改的 Settings(存在素材目录里)。
+package config
 
 import (
 	"log"
@@ -7,17 +9,15 @@ import (
 	"strings"
 )
 
-// loadDotEnv 读二进制同目录的 .env(scp 部署的情况),取不到再退回当前目录
-// (`go run .` 的情况)。真实环境变量优先于 .env 里的值。
-//
-// 直接沿用 audio-repeater 的实现,已经在那个项目上验证过。
-func loadDotEnv() {
+// LoadDotEnv 读二进制同目录的 .env(scp 部署的情况),取不到再往上一层
+// (开发时二进制在 build/),最后退回当前目录(go run 的情况)。
+// 真实环境变量优先于 .env 里的值。
+func LoadDotEnv() {
 	candidates := []string{}
 	if exe, err := os.Executable(); err == nil {
 		dir := filepath.Dir(exe)
 		candidates = append(candidates,
 			filepath.Join(dir, ".env"),
-			// 开发时二进制在 build/,.env 在项目根
 			filepath.Join(dir, "..", ".env"),
 		)
 	}
@@ -52,8 +52,8 @@ func loadDotEnv() {
 	log.Printf("没找到 .env(在二进制同目录、上一层和当前目录都找过),后台管理页将不可用")
 }
 
-// env 读配置,支持多个候选键名 —— 你的 .env 用的是小写 admin/password,
-// 同时也接受更常见的大写写法。
+// env 取第一个非空的环境变量。支持多个候选键名是因为 .env 里用的是
+// 小写的 admin/password,同时也要认更常见的大写写法。
 func env(keys ...string) string {
 	for _, k := range keys {
 		if v := strings.TrimSpace(os.Getenv(k)); v != "" {

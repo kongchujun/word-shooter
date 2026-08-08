@@ -1,4 +1,4 @@
-package main
+package media
 
 import (
 	"bytes"
@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"word-shooter/internal/config"
 )
 
 const (
@@ -23,24 +25,40 @@ const (
 )
 
 // 生成一张图可能要几十秒,给足超时
-var orClient = &http.Client{Timeout: 3 * time.Minute}
+const requestTimeout = 3 * time.Minute
+
+// 单个生成结果的大小上限,防止异常响应把内存吃光
+const maxResultBytes = 5 << 20
+
+// Client 是 OpenRouter 客户端。key 和缓存都挂在实例上,
+// 不再用包级全局 —— 那样没法在测试里替换,也看不出谁依赖了什么。
+type Client struct {
+	key  string
+	http *http.Client
+
+	// 图片模型的参数支持情况,缓存一下别每次生成都去拉一遍
+	capsMu sync.Mutex
+	caps   map[string]modelCaps
+	capsAt time.Time
+}
+
+func NewClient(key string) *Client {
+	return &Client{key: key, http: &http.Client{Timeout: requestTimeout}}
+}
+
+func (c *Client) Enabled() bool { return c.key != "" }
 
 // generated 是一次生成的结果。Cost 是 OpenRouter 报的实际花费(美元),
 // 拿不到就是 0 —— TTS 接口返回的是裸音频字节,没有 usage 信息。
-type generated struct {
+type Generated struct {
 	Data      []byte
 	MediaType string
 	Cost      float64
 	Model     string
 }
 
-func openRouterKey() string {
-	return env("OPENROUTER_API_KEY")
-}
-
-func orRequest(ctx context.Context, url string, body any) (*http.Response, error) {
-	key := openRouterKey()
-	if key == "" {
+func (c *Client) request(ctx context.Context, url string, body any) (*http.Response, error) {
+	if c.key == "" {
 		return nil, fmt.Errorf("服务端未配置 OPENROUTER_API_KEY,请在 .env 里设置")
 	}
 	buf, err := json.Marshal(body)
@@ -51,13 +69,13 @@ func orRequest(ctx context.Context, url string, body any) (*http.Response, error
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("Authorization", "Bearer "+c.key)
 	req.Header.Set("Content-Type", "application/json")
 	// OpenRouter 用这两个头做用量归属
 	req.Header.Set("HTTP-Referer", "https://github.com/local/word-shooter")
 	req.Header.Set("X-Title", "word-shooter")
 
-	resp, err := orClient.Do(req)
+	resp, err := c.http.Do(req)
 	if err != nil {
 		msg := err.Error()
 		if strings.Contains(msg, "Forbidden") || strings.Contains(msg, "proxy") || strings.Contains(msg, "CONNECT") {
@@ -75,12 +93,6 @@ func orRequest(ctx context.Context, url string, body any) (*http.Response, error
 }
 
 // 图片模型的参数支持情况,缓存一下别每次生成都去拉一遍
-var (
-	imgCapsMu sync.Mutex
-	imgCaps   map[string]modelCaps
-	imgCapsAt time.Time
-)
-
 // modelCaps 是某个模型支持的参数。Enums 里存 enum 类型参数的合法取值
 // (比如 output_format 只能是 ["jpeg"]),用来避免瞎发 webp 被 400。
 type modelCaps struct {
@@ -101,28 +113,28 @@ func (c modelCaps) enum(param string) []string {
 
 // imageModelParams 返回某个模型支持的图片参数。拉不到就返回零值,
 // 调用方会走 knownImageCaps 兜底。
-func imageModelParams(ctx context.Context, model string) modelCaps {
-	imgCapsMu.Lock()
-	defer imgCapsMu.Unlock()
+func (c *Client) imageModelParams(ctx context.Context, model string) modelCaps {
+	c.capsMu.Lock()
+	defer c.capsMu.Unlock()
 
-	if imgCaps == nil || time.Since(imgCapsAt) > 10*time.Minute {
-		caps, err := fetchImageCaps(ctx)
+	if c.caps == nil || time.Since(c.capsAt) > 10*time.Minute {
+		caps, err := c.fetchImageCaps(ctx)
 		if err != nil {
 			log.Printf("[openrouter] 拉模型参数表失败: %v", err)
 			return modelCaps{}
 		}
-		imgCaps, imgCapsAt = caps, time.Now()
+		c.caps, c.capsAt = caps, time.Now()
 	}
-	return imgCaps[model]
+	return c.caps[model]
 }
 
-func fetchImageCaps(ctx context.Context) (map[string]modelCaps, error) {
+func (c *Client) fetchImageCaps(ctx context.Context) (map[string]modelCaps, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, orImagesModelsURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+openRouterKey())
-	resp, err := orClient.Do(req)
+	req.Header.Set("Authorization", "Bearer "+c.key)
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -209,11 +221,11 @@ var knownImageCaps = map[string]modelCaps{
 //
 // 关键:**只发这个模型声明支持的参数,且取值必须在 enum 白名单里**。
 // jpeg/jpg 不能和 background:transparent 一起发 —— Sourceful 会 422。
-func generateImage(ctx context.Context, s Settings, word string) (*generated, error) {
+func (c *Client) GenerateImage(ctx context.Context, s config.Settings, word string) (*Generated, error) {
 	prompt := strings.ReplaceAll(s.ImagePrompt, "{word}", word)
 
 	body := map[string]any{"model": s.ImageModel, "prompt": prompt}
-	caps := imageModelParams(ctx, s.ImageModel)
+	caps := c.imageModelParams(ctx, s.ImageModel)
 	if len(caps.Params) == 0 {
 		if fallback, ok := knownImageCaps[s.ImageModel]; ok {
 			caps = fallback
@@ -269,7 +281,7 @@ func generateImage(ctx context.Context, s Settings, word string) (*generated, er
 	log.Printf("[openrouter] 请求生成图片 word=%q body=%v", word, bodyKeys(body))
 	started := time.Now()
 
-	resp, err := orRequest(ctx, orImagesURL, body)
+	resp, err := c.request(ctx, orImagesURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("%w(已等待 %s)", err, time.Since(started).Round(time.Second))
 	}
@@ -308,7 +320,7 @@ func generateImage(ctx context.Context, s Settings, word string) (*generated, er
 	}
 	log.Printf("[openrouter] 生成图片 word=%q model=%s %d 字节 耗时 %s 花费 $%.4f",
 		word, s.ImageModel, len(raw), time.Since(started).Round(time.Second), out.Usage.Cost)
-	return &generated{Data: raw, MediaType: mt, Cost: out.Usage.Cost, Model: s.ImageModel}, nil
+	return &Generated{Data: raw, MediaType: mt, Cost: out.Usage.Cost, Model: s.ImageModel}, nil
 }
 
 // supportsTransparent:声明了 background=transparent,且 format 允许带 alpha(或根本不限 format)。
@@ -400,8 +412,8 @@ func bodyKeys(body map[string]any) map[string]any {
 }
 
 // generateSpeech 生成发音 mp3。这个接口返回的是裸音频字节,不是 JSON。
-func generateSpeech(ctx context.Context, s Settings, text string) (*generated, error) {
-	resp, err := orRequest(ctx, orSpeechURL, map[string]any{
+func (c *Client) GenerateSpeech(ctx context.Context, s config.Settings, text string) (*Generated, error) {
+	resp, err := c.request(ctx, orSpeechURL, map[string]any{
 		"model":           s.TTSModel,
 		"input":           text,
 		"voice":           s.TTSVoice,
@@ -413,7 +425,7 @@ func generateSpeech(ctx context.Context, s Settings, text string) (*generated, e
 	}
 	defer resp.Body.Close()
 
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxUploadBytes))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResultBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -421,11 +433,11 @@ func generateSpeech(ctx context.Context, s Settings, text string) (*generated, e
 		return nil, fmt.Errorf("OpenRouter 返回了空音频")
 	}
 	log.Printf("[openrouter] 生成语音 text=%q model=%s voice=%s %d 字节", text, s.TTSModel, s.TTSVoice, len(raw))
-	return &generated{Data: raw, MediaType: "audio/mpeg", Model: s.TTSModel}, nil
+	return &Generated{Data: raw, MediaType: "audio/mpeg", Model: s.TTSModel}, nil
 }
 
 // orModel 是模型列表里前端要用到的字段
-type orModel struct {
+type Model struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	// 图片模型:支不支持 background:transparent。不支持的话出来的图带底色,
@@ -438,9 +450,8 @@ type orModel struct {
 //
 // 图片走 /images/models:那个端点的 supported_parameters 才是图片 API 的参数,
 // /models?output_modalities=image 返回的是 chat 的参数,看不出支不支持 background。
-func listModels(ctx context.Context, modality string) ([]orModel, error) {
-	key := openRouterKey()
-	if key == "" {
+func (c *Client) ListModels(ctx context.Context, modality string) ([]Model, error) {
+	if c.key == "" {
 		return nil, fmt.Errorf("未配置 OPENROUTER_API_KEY")
 	}
 
@@ -453,9 +464,9 @@ func listModels(ctx context.Context, modality string) ([]orModel, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("Authorization", "Bearer "+c.key)
 
-	resp, err := orClient.Do(req)
+	resp, err := c.http.Do(req)
 	if err != nil {
 		msg := err.Error()
 		if strings.Contains(msg, "Forbidden") || strings.Contains(msg, "proxy") || strings.Contains(msg, "CONNECT") {
@@ -481,10 +492,10 @@ func listModels(ctx context.Context, modality string) ([]orModel, error) {
 		return nil, err
 	}
 
-	models := make([]orModel, 0, len(out.Data))
+	models := make([]Model, 0, len(out.Data))
 	for _, m := range out.Data {
 		caps := parseModelCaps(m.SupportedParameters)
-		models = append(models, orModel{
+		models = append(models, Model{
 			ID:          m.ID,
 			Name:        m.Name,
 			Transparent: modality == "image" && supportsTransparent(caps),

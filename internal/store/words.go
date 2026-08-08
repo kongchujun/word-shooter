@@ -1,7 +1,8 @@
-package main
+package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -40,40 +41,60 @@ type Manifest struct {
 	GeneratedAt string            `json:"generatedAt"`
 }
 
-// 支持的音效名,对应 assets/sfx/<name>.mp3
-var sfxNames = []string{"hit", "miss", "blank", "levelup"}
-
-// wordMeta 是一个词的补充信息(中文释义 + 所属类别)。
-type wordMeta struct {
+// Meta 是一个词的补充信息(中文释义 + 所属类别)。
+type Meta struct {
 	Zh   string   `json:"zh"`
 	Tags []string `json:"tags"`
 }
 
-// wordsFile 是 assets/words.json 的格式:
+// wordsFile 是 words.json 的格式:
 //
 //	{
 //	  "categories": [ { "id": "fruit", "name": "水果", "icon": "🍎", "order": 1 } ],
 //	  "words": { "apple": { "zh": "苹果", "tags": ["fruit"] } }
 //	}
 //
-// 也兼容早期手写的扁平格式(顶层直接就是 id → wordMeta 的 map)。
+// 也兼容早期手写的扁平格式(顶层直接是 id → Meta 的 map)。
 type wordsFile struct {
-	Categories []Category          `json:"categories"`
-	Words      map[string]wordMeta `json:"words"`
+	Categories []Category      `json:"categories"`
+	Words      map[string]Meta `json:"words"`
 }
 
-// words.json 是后台唯一的可变状态,读写都过这把锁
-var wordsFileMu sync.Mutex
+// 支持的音效名,对应 sfx/<name>.mp3
+var SfxNames = []string{"hit", "miss", "blank", "levelup"}
 
-func wordsFilePath(assetsDir string) string {
-	return filepath.Join(assetsDir, "words.json")
+// 同一个词有多种格式时按这个顺序挑,越靠前越优先。
+var (
+	ImageExts = []string{".webp", ".png", ".svg", ".jpg", ".jpeg", ".gif"}
+	AudioExts = []string{".mp3", ".m4a", ".aac", ".ogg", ".wav"}
+)
+
+// WordStore 管素材目录:扫描生成词库,读写 words.json。
+type WordStore struct {
+	mu  sync.Mutex
+	dir string
 }
 
-// loadWordsFile 读词库元数据。文件不存在或坏掉都返回空结构,不让后台开不了。
-func loadWordsFile(assetsDir string) wordsFile {
-	out := wordsFile{Words: map[string]wordMeta{}}
+func NewWordStore(assetsDir string) *WordStore {
+	return &WordStore{dir: assetsDir}
+}
 
-	data, err := os.ReadFile(wordsFilePath(assetsDir))
+func (s *WordStore) Dir() string { return s.dir }
+
+func (s *WordStore) jsonPath() string { return filepath.Join(s.dir, "words.json") }
+
+// LoadMeta 读词库元数据。文件不存在或坏掉都返回空结构,不让后台开不了。
+func (s *WordStore) LoadMeta() (map[string]Meta, []Category) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	wf := s.loadLocked()
+	return wf.Words, wf.Categories
+}
+
+func (s *WordStore) loadLocked() wordsFile {
+	out := wordsFile{Words: map[string]Meta{}}
+
+	data, err := os.ReadFile(s.jsonPath())
 	if err != nil {
 		return out
 	}
@@ -88,16 +109,16 @@ func loadWordsFile(assetsDir string) wordsFile {
 	if _, isNew := probe["words"]; isNew {
 		if err := json.Unmarshal(data, &out); err != nil {
 			log.Printf("words.json 解析失败: %v", err)
-			return wordsFile{Words: map[string]wordMeta{}}
+			return wordsFile{Words: map[string]Meta{}}
 		}
 		if out.Words == nil {
-			out.Words = map[string]wordMeta{}
+			out.Words = map[string]Meta{}
 		}
 		return out
 	}
 
 	// 旧的扁平格式:{ "apple": { "zh": "苹果", "tags": ["fruit"] } }
-	flat := map[string]wordMeta{}
+	flat := map[string]Meta{}
 	if err := json.Unmarshal(data, &flat); err != nil {
 		log.Printf("words.json 解析失败: %v", err)
 		return out
@@ -106,10 +127,37 @@ func loadWordsFile(assetsDir string) wordsFile {
 	return out
 }
 
-// saveWordsFile 原子写入:先写临时文件再 rename,避免写到一半断电留下半个文件。
-func saveWordsFile(assetsDir string, wf wordsFile) error {
+// SaveCategories 整表替换类别。
+func (s *WordStore) SaveCategories(cats []Category) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	wf := s.loadLocked()
+	wf.Categories = cats
+	return s.saveLocked(wf)
+}
+
+// SaveWord 写一个词的元数据。
+func (s *WordStore) SaveWord(id string, m Meta) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	wf := s.loadLocked()
+	wf.Words[id] = m
+	return s.saveLocked(wf)
+}
+
+// DeleteWord 删掉一个词的元数据。文件由上层删。
+func (s *WordStore) DeleteWord(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	wf := s.loadLocked()
+	delete(wf.Words, id)
+	return s.saveLocked(wf)
+}
+
+// saveLocked 原子写:先写临时文件再 rename。
+func (s *WordStore) saveLocked(wf wordsFile) error {
 	if wf.Words == nil {
-		wf.Words = map[string]wordMeta{}
+		wf.Words = map[string]Meta{}
 	}
 	if wf.Categories == nil {
 		wf.Categories = []Category{}
@@ -120,32 +168,32 @@ func saveWordsFile(assetsDir string, wf wordsFile) error {
 
 	data, err := json.MarshalIndent(wf, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("序列化 words.json: %w", err)
 	}
 	data = append(data, '\n')
 
-	path := wordsFilePath(assetsDir)
+	path := s.jsonPath()
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return err
+		return fmt.Errorf("写临时文件: %w", err)
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("替换 words.json: %w", err)
+	}
+	return nil
 }
 
-// 同一个词有多种格式时按这个顺序挑,越靠前越优先。
-var imageExts = []string{".webp", ".png", ".svg", ".jpg", ".jpeg", ".gif"}
-var audioExts = []string{".mp3", ".m4a", ".aac", ".ogg", ".wav"}
+// Files 返回 images/ 和 audio/ 里各自的 词 id → 文件名。
+func (s *WordStore) Files() (images, audios map[string]string) {
+	return Collect(filepath.Join(s.dir, "images"), ImageExts),
+		Collect(filepath.Join(s.dir, "audio"), AudioExts)
+}
 
-// scanAssets 扫描 images/ 和 audio/,取文件名交集生成词库。
-// 只有图和音频都齐了的词才进游戏,缺一半的会作为 warning 返回,启动时打在日志里。
-func scanAssets(assetsDir string) (Manifest, []string) {
-	images := collect(filepath.Join(assetsDir, "images"), imageExts)
-	audios := collect(filepath.Join(assetsDir, "audio"), audioExts)
-
-	wordsFileMu.Lock()
-	wf := loadWordsFile(assetsDir)
-	wordsFileMu.Unlock()
-	meta := wf.Words
+// Scan 扫描 images/ 和 audio/,取文件名交集生成词库。
+// 只有图和音频都齐了的词才进游戏,缺一半的会作为 warning 返回。
+func (s *WordStore) Scan() (Manifest, []string) {
+	images, audios := s.Files()
+	meta, declared := s.LoadMeta()
 
 	var warnings []string
 	ids := make([]string, 0, len(images))
@@ -171,8 +219,8 @@ func scanAssets(assetsDir string) (Manifest, []string) {
 			En:    strings.ReplaceAll(id, "-", " "),
 			Zh:    m.Zh,
 			Tags:  tags,
-			Image: assetURL("images", images[id]),
-			Audio: assetURL("audio", audioFile),
+			Image: AssetURL("images", images[id]),
+			Audio: AssetURL("audio", audioFile),
 		})
 	}
 
@@ -187,17 +235,17 @@ func scanAssets(assetsDir string) (Manifest, []string) {
 		warnings = append(warnings, "缺图片,已跳过: audio/"+audios[id]+" (需要 images/"+id+".webp)")
 	}
 
-	sfxFiles := collect(filepath.Join(assetsDir, "sfx"), audioExts)
+	sfxFiles := Collect(filepath.Join(s.dir, "sfx"), AudioExts)
 	sfx := map[string]string{}
-	for _, name := range sfxNames {
+	for _, name := range SfxNames {
 		if f, ok := sfxFiles[name]; ok {
-			sfx[name] = assetURL("sfx", f)
+			sfx[name] = AssetURL("sfx", f)
 		}
 	}
 
 	return Manifest{
 		Words:       words,
-		Categories:  resolveCategories(wf.Categories, words),
+		Categories:  resolveCategories(declared, words),
 		Sfx:         sfx,
 		GeneratedAt: time.Now().Format(time.RFC3339),
 	}, warnings
@@ -234,8 +282,8 @@ func resolveCategories(declared []Category, words []Word) []Category {
 	return out
 }
 
-// collect 返回 词 id -> 文件名。同名多格式时按 exts 的顺序取优先级最高的。
-func collect(dir string, exts []string) map[string]string {
+// Collect 返回 词 id → 文件名。同名多格式时按 exts 的顺序取优先级最高的。
+func Collect(dir string, exts []string) map[string]string {
 	out := map[string]string{}
 	rank := map[string]int{}
 	for i, e := range exts {
@@ -265,8 +313,8 @@ func collect(dir string, exts []string) map[string]string {
 	return out
 }
 
-// 文件名里有空格或中文时也要能正确取到
-func assetURL(sub, file string) string {
+// AssetURL 拼素材的对外地址。文件名里有空格或中文时也要能正确取到。
+func AssetURL(sub, file string) string {
 	u := url.URL{Path: "/assets/" + sub + "/" + file}
 	return u.String()
 }

@@ -12,10 +12,10 @@ npm --prefix web run build
 mkdir -p build
 
 echo "==> 编译 linux/amd64"
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o build/word-shooter-linux-amd64 .
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o build/word-shooter-linux-amd64 ./cmd/word-shooter
 
 echo "==> 编译本机版本"
-CGO_ENABLED=0 go build -trimpath -o build/word-shooter .
+CGO_ENABLED=0 go build -trimpath -o build/word-shooter ./cmd/word-shooter
 
 ls -lh build/
 echo

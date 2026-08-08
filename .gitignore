@@ -26,8 +26,9 @@ assets/settings.json
 .claude/
 .DS_Store
 
-# 访问日志(含 IP,不进仓库)
+# 访问日志(含 IP,绝对不能进仓库)。data/ 是现在的 SQLite,logs/ 是早期的 JSONL
+data/
 logs/
 
 # IP 归属地库,构建时下载,不进仓库(11MB)
-geoip/*.xdb
+internal/geoip/data/*.xdb

@@ -5,7 +5,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-DEST=geoip/ip2region_v4.xdb
+DEST=internal/geoip/data/ip2region_v4.xdb
 URL=https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v4.xdb
 
 if [ -s "$DEST" ]; then
@@ -14,7 +14,7 @@ if [ -s "$DEST" ]; then
 fi
 
 echo "==> 下载 IP 归属地库"
-mkdir -p geoip
+mkdir -p internal/geoip/data
 if curl -fSL --retry 3 --retry-delay 2 -o "$DEST.tmp" "$URL"; then
   mv "$DEST.tmp" "$DEST"
   echo "    完成($(du -h "$DEST" | cut -f1))"

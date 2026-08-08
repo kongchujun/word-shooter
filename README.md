@@ -85,18 +85,27 @@ Azure 出来的是 24kHz 单声道 48kbps mp3,一个单词约 6–10KB / 1.1–1
 
 ### 访问记录
 
-一层中间件把每个请求写进二进制同目录的 `logs/access-YYYY-MM-DD.jsonl`,后台「访问」页读它。
+一层 Gin 中间件把每个请求写进二进制同目录的 `data/access.db`(SQLite),后台「访问」页读它。
 
 - **不记**图片音频(`/assets/`)和前端静态资源(`/static/`)—— 一局游戏就能刷出几十条,记了反而看不清人
-- 按天切文件,默认留 14 天,过期的自动删。`-keep-days` 可调,`-logs` 可换目录
-- **日志目录不能放进 `assets/`** —— 那个目录是对外开放的,访问日志里有 IP 和 UA
+- **默认只留 5 天**,每小时清一次,`-keep-days` 可调,`-data` 可换目录
+- 写入是异步的:请求线程只往队列里塞,单独一个 goroutine 落盘,磁盘抖动不会传导到响应延迟。队列满了宁可丢记录也不拖慢请求
+- **数据目录不能放进 `assets/`** —— 那个目录是对外开放的,访问日志里有 IP 和 UA
 - **归属地用内置的离线库查**([ip2region](https://gitee.com/lionsoul/ip2region),Apache 2.0 / MIT),不调任何第三方接口、不把访问者 IP 发给别人。国内到市级 + 运营商,国外到国家/州
 - 局域网地址不查归属地(没有意义),只标「局域网 / 公网」
 
-日志格式是每行一条 JSON,想自己 grep 也方便:
+**为什么用 SQLite 还能保持单二进制**:驱动是 `modernc.org/sqlite`,纯 Go 实现。
+常见的 `mattn/go-sqlite3` 要 CGO,一开 CGO 就没法 `CGO_ENABLED=0` 交叉编译 linux/arm64,
+`deploy.sh` 那套"下载一个静态二进制就能跑"会直接断掉。代价是二进制大了约 12MB。
 
-```
-{"t":"2026-08-08T00:44:15+09:00","ip":"192.168.0.77","m":"GET","p":"/","s":200,"ms":2,"ua":"..."}
+**删了数据文件也要变小**:SQLite 只 DELETE 的话空页会一直留着,文件只涨不落。
+建库时设了 `auto_vacuum=INCREMENTAL`(必须在建表前设),清理后再跑 `incremental_vacuum`
+才能真的把空间还回去。这条有测试盯着:`go test ./internal/store/`。
+
+想自己查的话直接开库就行:
+
+```bash
+sqlite3 data/access.db 'SELECT datetime(ts/1000,"unixepoch","localtime"), ip, path, status FROM access ORDER BY ts DESC LIMIT 20'
 ```
 
 **归属地库不进仓库**(11MB),由 [`scripts/fetch-geoip.sh`](scripts/fetch-geoip.sh) 在构建前下载,`build.sh` 和 CI 都会调它。
@@ -195,15 +204,14 @@ dev 模式下控制台有 `__game` 可以调试,`__game.debugTargets()` 会列�
 ### 目录
 
 ```
-main.go        静态服务 + 路由 + dotfile 防护
-manifest.go    扫描素材生成词库,读写 words.json
-admin.go       后台 API(类别/词条 CRUD、生成、设置)
-auth.go        无数据库的 session 鉴权 + 登录限流
-openrouter.go  图片和 OpenRouter 语音,按模型支持的参数构造请求
-azure.go       Azure 语音(SSML 合成 + 英语音色列表)
-tts.go         两个语音源的分发
-settings.go    assets/settings.json 读写
-env.go         .env 加载
+cmd/word-shooter/main.go     入口:flag、装配依赖、启动、优雅退出
+internal/
+├── config/     .env 加载、只读 Config、后台可改的 Settings
+├── store/      words.json 读写 + 素材扫描;SQLite 访问日志(带测试)
+├── geoip/      IP 归属地,内置离线库(go:embed data/)
+├── media/      OpenRouter 图片、OpenRouter/Azure 两个语音源及分发
+└── server/     Gin 路由、鉴权中间件、访问日志中间件、后台接口
+web/embed.go    把前端产物 go:embed 进来(必须待在 web/ 下,embed 不能往上引用)
 
 web/admin.html + web/src/admin/    后台页面(Vite 第二个入口)
 web/src/
@@ -223,6 +231,8 @@ web/src/
 3. **主循环不能在末尾排下一帧** —— `Game.frame()` 里 `requestAnimationFrame` 必须放在开头并包 try/catch。放末尾的话,通关那一帧 `this.play` 被置空引发的空指针会直接掐断整条 rAF 链,画面永久冻住。
 4. **OpenRouter 图片参数要照着模型能力拼** —— 每个模型只接受自己声明的参数,取值还必须落在它的 enum 白名单里;多发一个字段、或者值不在白名单里,都是 400。`generateImage()` 会先查 `/images/models` 的 `supported_parameters` 再拼请求。两个具体的坑:`supported_parameters` 已经从字符串数组改成了对象(`{"output_format":{"type":"enum","values":["jpeg"]}}`),`parseModelCaps()` 两种格式都认;`jpeg` 配 `background: transparent` 会被 provider 以 422 拒掉,这个组合在代码里被挡住了。
 5. **词 id 必须过白名单正则** —— 后台能写文件,没有这道防线的话 id 传 `../../.env` 就能覆盖密钥。
+6. **Gin 的可信代理要显式设置** —— 默认信任所有代理,任何人都能伪造 `X-Forwarded-For` 把访问记录里的 IP 写成别人的。这里只信任回环地址。
+7. **SQLite 的 `auto_vacuum` 必须在建表前设** —— 建完表再设是不生效的,删数据后文件永远不会变小。
 
 ---
 
