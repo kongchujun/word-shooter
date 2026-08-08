@@ -201,12 +201,21 @@ for f in *.png; do cwebp -q 80 -alpha_q 100 "$f" -o "${f%.png}.webp"; done
 
 ## 开发
 
+开两个终端:
+
 ```bash
-cd web && npm install && npm run dev   # 前端 :5181,/api 和 /assets 代理到 :8091
-go run . -assets ./assets              # 后端 :8091
+go run ./cmd/word-shooter              # 后端 :8091
+cd web && npm run dev                  # 前端 :5181,/api 和 /assets 代理到 :8091
 ```
 
-后端不起也能开发,前端会自动用内置占位词库。
+然后开 **http://localhost:5181** —— 改 `web/src/` 下的代码会热更新。
+后端不起也能开发前端,会自动退回内置的 emoji 占位词库。
+
+**入口路径变了**:重构成 `cmd/ + internal/` 布局后,`go run .` 不再有效
+(根目录已经没有 .go 文件),要写成 `go run ./cmd/word-shooter`。
+
+`go run` 时二进制在系统临时目录里,所以 `data/`(访问日志库)和 `assets/`
+都会落到当前工作目录 —— 记得在项目根目录执行。
 
 dev 模式下控制台有 `__game` 可以调试,`__game.debugTargets()` 会列出当前回合的靶子位置和哪个是正确答案。
 
