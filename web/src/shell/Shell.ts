@@ -1,5 +1,6 @@
 import { GAMES } from '../math/questions'
 import { getLocale, LOCALES, setLocale, t } from '../i18n'
+import { WHACK_GAMES } from '../whack/sets'
 import type { ViewId } from './routes'
 
 interface NavItem {
@@ -26,6 +27,14 @@ function nav(): NavItem[] {
       // 子项跟着游戏清单走,加新游戏不用两头改
       children: GAMES().map((g) => ({ id: g.view, icon: g.icon, name: g.name, short: g.short })),
     },
+    {
+      id: 'whack',
+      icon: '🔨',
+      name: t('nav.whack'),
+      short: t('nav.whack.short'),
+      tip: t('nav.whack.tip'),
+      children: WHACK_GAMES().map((g) => ({ id: g.view, icon: g.icon, name: g.name, short: g.short })),
+    },
   ]
 }
 
@@ -38,6 +47,10 @@ const ALL_IDS: string[] = [
   'math/balance',
   'math/bike',
   'math/bike-duel',
+  'whack',
+  'whack/number',
+  'whack/weekday',
+  'whack/month',
 ]
 
 /**

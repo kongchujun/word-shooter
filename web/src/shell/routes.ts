@@ -11,3 +11,7 @@ export type ViewId =
   | 'math/balance'
   | 'math/bike'
   | 'math/bike-duel'
+  | 'whack'
+  | 'whack/number'
+  | 'whack/weekday'
+  | 'whack/month'

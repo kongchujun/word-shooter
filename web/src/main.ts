@@ -5,6 +5,8 @@ import { MathApp } from './math/MathApp'
 import { MathScreen } from './math/MathScreen'
 import { gameByView } from './math/questions'
 import { Shell } from './shell/Shell'
+import { WhackApp } from './whack/WhackApp'
+import { whackGameByView } from './whack/sets'
 import { applyDocumentLang } from './i18n'
 
 applyDocumentLang()
@@ -20,16 +22,21 @@ const shell = new Shell(ui)
 const game = new Game(engine, ui)
 const mathHome = new MathScreen(ui)
 const mathApp = new MathApp(engine, ui)
+const whackApp = new WhackApp(engine, ui)
 
 game.onPlaying = (playing) => shell.setBarVisible(!playing)
 mathApp.onPlaying = (playing) => shell.setBarVisible(!playing)
+whackApp.onPlaying = (playing) => shell.setBarVisible(!playing)
 mathHome.onPick = (view) => shell.go(view)
+whackApp.onPick = (view) => shell.go(view)
 
 shell.onNavigate = (view) => {
   const quiz = gameByView(view)
+  const whack = whackGameByView(view)
 
   if (view !== 'words') game.leave()
   if (view !== 'math') mathHome.hide()
+  if (!whack && view !== 'whack') whackApp.leave()
   shell.setBarVisible(true)
 
   // 先等多人房 leave 完成,再进新页,避免幽灵座位还占着
@@ -38,6 +45,8 @@ shell.onNavigate = (view) => {
     if (view === 'words') void game.enter()
     if (view === 'math') mathHome.show()
     if (quiz) mathApp.enter(quiz)
+    if (view === 'whack') whackApp.enterHome()
+    if (whack) whackApp.enter(whack)
   })()
 }
 
