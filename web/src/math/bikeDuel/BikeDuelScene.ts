@@ -99,6 +99,16 @@ export class BikeDuelScene implements Scene {
   private winnerSeat = 0
   private standings: { seat: number; distance: number }[] = []
 
+  /** 上一次答对的对局时间;用来判断「答得飞快」 */
+  private lastCorrectAt = -1
+  /** 加速 / 火箭特效剩余时间 */
+  private boostT = 0
+  private boostKind: 'nitro' | 'rocket' | null = null
+  private boostFlash = 0
+  private boostLabel = ''
+  private shakeT = 0
+  private jetAcc = 0
+
   private w = 800
   private h = 600
   private safe = { top: 0, right: 0, bottom: 0, left: 0 }
@@ -223,6 +233,11 @@ export class BikeDuelScene implements Scene {
     this.phaseT = 0
     this.elapsed = 0
     this.timeLeft = this.level.duration
+    this.lastCorrectAt = -1
+    this.boostT = 0
+    this.boostKind = null
+    this.boostFlash = 0
+    this.shakeT = 0
     this.nextQuestion()
     this.syncHud()
   }
@@ -279,12 +294,24 @@ export class BikeDuelScene implements Scene {
       this.correct++
       this.combo++
       this.bestCombo = Math.max(this.bestCombo, this.combo)
-      const gain = BIKE.baseMeters + Math.max(0, this.combo - 1) * BIKE.comboMeters
+      const gap = this.lastCorrectAt < 0 ? 99 : this.elapsed - this.lastCorrectAt
+      this.lastCorrectAt = this.elapsed
+      let gain = BIKE.baseMeters + Math.max(0, this.combo - 1) * BIKE.comboMeters
+      const bx = this.myBikeX()
+      const by = this.myBikeY()
+      this.particles.burst(bx, by - 20, 48, 18, 0.9)
+      // 连击 + 答得够快 → 加速 / 喷火箭
+      if (this.combo >= 2 && gap <= BIKE.fastGap) {
+        const rocket = this.combo >= BIKE.rocketCombo && gap <= BIKE.rocketGap
+        gain += rocket ? BIKE.rocketBonus : BIKE.boostBonus
+        this.triggerBoost(rocket ? 'rocket' : 'nitro', bx, by)
+      } else {
+        this.engine.audio.playSfx('hit')
+      }
       this.distance += gain
-      this.particles.burst(this.myBikeX(), this.myBikeY() - 20, 48, 18, 0.9)
-      this.engine.audio.playSfx('hit')
     } else {
       this.combo = 0
+      this.lastCorrectAt = -1
       this.lockT = BIKE.missLock
       this.engine.audio.playSfx('miss')
     }
@@ -294,6 +321,18 @@ export class BikeDuelScene implements Scene {
     void this.pushOnline()
     this.phase = 'feedback'
     this.phaseT = 0
+  }
+
+  private triggerBoost(kind: 'nitro' | 'rocket', x: number, y: number): void {
+    this.boostKind = kind
+    this.boostT = kind === 'rocket' ? BIKE.rocketHold : BIKE.boostHold
+    this.boostFlash = 0.85
+    this.boostLabel = kind === 'rocket' ? t('math.duel.rocket') : t('math.duel.boost')
+    this.shakeT = kind === 'rocket' ? 0.35 : 0.2
+    const power = kind === 'rocket' ? 1.45 : 1
+    this.particles.jet(x - 28, y + 6, kind === 'rocket' ? 28 : 16, power, kind === 'rocket' ? 18 : 32)
+    this.particles.burst(x, y - 10, kind === 'rocket' ? 15 : 40, kind === 'rocket' ? 22 : 12, power)
+    this.engine.audio.playSfx(kind === 'rocket' ? 'levelup' : 'hit')
   }
 
   private pushSample(): void {
@@ -409,6 +448,11 @@ export class BikeDuelScene implements Scene {
   update(dt: number): void {
     this.bg.update(dt)
     this.particles.update(dt)
+    if (this.boostT > 0) this.boostT = Math.max(0, this.boostT - dt)
+    if (this.boostT <= 0) this.boostKind = null
+    if (this.boostFlash > 0) this.boostFlash = Math.max(0, this.boostFlash - dt)
+    if (this.shakeT > 0) this.shakeT = Math.max(0, this.shakeT - dt)
+
     this.displayDist = lerp(this.displayDist, this.distance, 1 - Math.pow(0.001, dt))
     for (const r of this.racers) {
       r.display = lerp(r.display, r.dist, 1 - Math.pow(0.001, dt))
@@ -416,9 +460,22 @@ export class BikeDuelScene implements Scene {
     }
     const leader = this.leaderDist()
     this.displayRival = lerp(this.displayRival, leader, 1 - Math.pow(0.001, dt))
-    this.scroll += (40 + this.distance * 0.35) * dt
-    this.pedal += dt * (2.5 + this.combo * 0.4)
+    const boostScroll = this.boostKind === 'rocket' ? 140 : this.boostKind === 'nitro' ? 90 : 0
+    this.scroll += (40 + this.distance * 0.35 + (this.boostT > 0 ? boostScroll : 0)) * dt
+    this.pedal += dt * (2.5 + this.combo * 0.4 + (this.boostT > 0 ? 3 : 0))
     this.rivalPedal += dt * (2.2 + Math.min(6, leader / 40))
+
+    if (this.boostT > 0 && this.phase !== 'countdown' && this.phase !== 'done') {
+      this.jetAcc += dt
+      const interval = this.boostKind === 'rocket' ? 0.04 : 0.07
+      if (this.jetAcc >= interval) {
+        this.jetAcc = 0
+        const power = this.boostKind === 'rocket' ? 1.2 : 0.85
+        this.particles.jet(this.myBikeX() - 30, this.myBikeY() + 8, this.boostKind === 'rocket' ? 7 : 4, power)
+      }
+    } else {
+      this.jetAcc = 0
+    }
 
     if (this.lockT > 0) this.lockT = Math.max(0, this.lockT - dt)
     if (this.phase === 'done') return
@@ -464,6 +521,16 @@ export class BikeDuelScene implements Scene {
 
   draw(ctx: CanvasRenderingContext2D): void {
     const L = this.raceLayout()
+    const shake =
+      this.shakeT > 0
+        ? {
+            x: (Math.random() - 0.5) * 6 * (this.shakeT / 0.35),
+            y: (Math.random() - 0.5) * 4 * (this.shakeT / 0.35),
+          }
+        : { x: 0, y: 0 }
+
+    ctx.save()
+    ctx.translate(shake.x, shake.y)
     this.bg.draw(ctx)
     drawRoad(ctx, this.w, this.h, this.scroll, L.roadTop, L.roadBot)
 
@@ -471,7 +538,11 @@ export class BikeDuelScene implements Scene {
     else this.drawOnlineRace(ctx, L)
 
     this.particles.draw(ctx)
+    if (this.boostT > 0) this.drawSpeedLines(ctx, L)
     this.drawHudPanel(ctx, L)
+    if (this.boostFlash > 0 || this.boostT > 0.4) this.drawBoostBanner(ctx, L)
+    ctx.restore()
+
     if (this.phase === 'countdown') {
       this.drawCountdown(ctx, L)
       return
@@ -491,6 +562,7 @@ export class BikeDuelScene implements Scene {
     const tagLift = 48 * L.bikeScale + 14
     drawBike(ctx, rivalX, rivalY, this.rivalPedal, '#9b6bff', '#7c4dff', 0.85, L.bikeScale * 0.9)
     this.drawNameTag(ctx, rivalX, rivalY - tagLift, t('math.duel.rivalGhost'), false, L)
+    this.drawBoostFlame(ctx, myX, myY, L.bikeScale)
     drawBike(ctx, myX, myY, this.pedal, '#4d8dff', '#e85d4c', 1, L.bikeScale)
     this.drawYouMarker(ctx, myX, myY, null, L)
   }
@@ -521,8 +593,104 @@ export class BikeDuelScene implements Scene {
     const myX = mid
     const myY = this.laneY(seats.indexOf(this.mySeat), total, L)
     const mine = SEAT_STYLE[(this.mySeat - 1) % SEAT_STYLE.length]
+    this.drawBoostFlame(ctx, myX, myY, L.bikeScale)
     drawBike(ctx, myX, myY, this.pedal, mine.frame, mine.helmet, 1, L.bikeScale)
     this.drawYouMarker(ctx, myX, myY, this.mySeat, L)
+  }
+
+  private drawBoostFlame(ctx: CanvasRenderingContext2D, bikeX: number, bikeY: number, scale: number): void {
+    if (this.boostT <= 0 || !this.boostKind) return
+    const rocket = this.boostKind === 'rocket'
+    const pulse = 0.75 + Math.sin(this.elapsed * (rocket ? 28 : 18)) * 0.25
+    const len = (rocket ? 54 : 36) * scale * pulse * Math.min(1, this.boostT / 0.4)
+    const h = (rocket ? 18 : 12) * scale
+    const x0 = bikeX - 32 * scale
+    const y0 = bikeY + 8 * scale
+
+    ctx.save()
+    ctx.globalCompositeOperation = 'lighter'
+    // 外焰
+    const g = ctx.createLinearGradient(x0, y0, x0 - len, y0)
+    g.addColorStop(0, rocket ? 'rgba(255,240,180,0.95)' : 'rgba(255,220,120,0.9)')
+    g.addColorStop(0.35, rocket ? 'rgba(255,120,40,0.85)' : 'rgba(255,140,50,0.75)')
+    g.addColorStop(1, 'rgba(255,40,0,0)')
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.moveTo(x0, y0 - h * 0.35)
+    ctx.lineTo(x0 - len, y0)
+    ctx.lineTo(x0, y0 + h * 0.35)
+    ctx.closePath()
+    ctx.fill()
+
+    // 芯焰
+    const g2 = ctx.createLinearGradient(x0, y0, x0 - len * 0.65, y0)
+    g2.addColorStop(0, 'rgba(255,255,255,0.95)')
+    g2.addColorStop(0.5, rocket ? 'rgba(120,220,255,0.7)' : 'rgba(255,200,80,0.65)')
+    g2.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = g2
+    ctx.beginPath()
+    ctx.moveTo(x0, y0 - h * 0.18)
+    ctx.lineTo(x0 - len * 0.65, y0)
+    ctx.lineTo(x0, y0 + h * 0.18)
+    ctx.closePath()
+    ctx.fill()
+
+    if (rocket) {
+      // 小火箭筒挂在后轮旁
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.fillStyle = '#c0c8d8'
+      ctx.fillRect(x0 - 6 * scale, y0 - 7 * scale, 14 * scale, 10 * scale)
+      ctx.fillStyle = '#ff5a3a'
+      ctx.beginPath()
+      ctx.moveTo(x0 + 8 * scale, y0 - 7 * scale)
+      ctx.lineTo(x0 + 14 * scale, y0)
+      ctx.lineTo(x0 + 8 * scale, y0 + 3 * scale)
+      ctx.closePath()
+      ctx.fill()
+    }
+    ctx.restore()
+  }
+
+  private drawSpeedLines(ctx: CanvasRenderingContext2D, L: ReturnType<BikeDuelScene['raceLayout']>): void {
+    const rocket = this.boostKind === 'rocket'
+    const a = Math.min(0.55, 0.2 + this.boostT * 0.2)
+    ctx.save()
+    ctx.strokeStyle = rocket ? `rgba(160,220,255,${a})` : `rgba(255,210,120,${a})`
+    ctx.lineWidth = rocket ? 2.5 : 1.8
+    const y0 = L.roadTop + 10
+    const y1 = L.roadBot - 10
+    const n = rocket ? 14 : 9
+    for (let i = 0; i < n; i++) {
+      const y = y0 + ((y1 - y0) * (i + 0.3)) / n
+      const len = 40 + ((i * 37 + Math.floor(this.scroll)) % 50)
+      const x = ((this.scroll * (rocket ? 2.2 : 1.6) + i * 73) % (this.w + 80)) - 40
+      ctx.beginPath()
+      ctx.moveTo(this.w - x, y)
+      ctx.lineTo(this.w - x - len, y + (i % 2 === 0 ? -2 : 2))
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  private drawBoostBanner(ctx: CanvasRenderingContext2D, L: ReturnType<BikeDuelScene['raceLayout']>): void {
+    if (!this.boostLabel) return
+    const flash = this.boostFlash > 0 ? this.boostFlash / 0.85 : Math.min(1, this.boostT / 0.5) * 0.7
+    const rocket = this.boostKind === 'rocket'
+    const y = L.panelTop + L.panelH + (L.compact ? 28 : 36)
+    const pop = 1 + (this.boostFlash > 0 ? this.boostFlash * 0.25 : 0)
+    ctx.save()
+    ctx.globalAlpha = Math.min(1, flash + 0.15)
+    ctx.translate(this.w / 2, y)
+    ctx.scale(pop, pop)
+    ctx.font = `bold ${L.narrow ? 22 : rocket ? 30 : 26}px system-ui, sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.lineWidth = 5
+    ctx.strokeStyle = 'rgba(20,26,40,0.75)'
+    ctx.strokeText(this.boostLabel, 0, 0)
+    ctx.fillStyle = rocket ? '#9ae8ff' : '#ffe08a'
+    ctx.fillText(this.boostLabel, 0, 0)
+    ctx.restore()
   }
 
   private laneY(index: number, total: number, L = this.raceLayout()): number {

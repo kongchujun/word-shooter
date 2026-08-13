@@ -185,6 +185,8 @@ export const en: Record<keyof typeof zh, string> = {
   'math.duel.resultLoseTitle': 'So close!',
   'math.duel.retryLose': 'Rematch',
   'math.duel.correctCount': 'Correct answers',
+  'math.duel.boost': 'Boost!',
+  'math.duel.rocket': '🚀 Rocket boost!',
 
   'math.diff.easy': 'Starter',
   'math.diff.hard': 'Harder',

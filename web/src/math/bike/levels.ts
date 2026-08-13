@@ -26,6 +26,17 @@ export const BIKE = {
   missLock: 0.35,
   /** 反馈闪一下再出下一题 */
   feedback: 0.28,
+  /** 两次答对间隔 ≤ 此秒数,算「答得飞快」 */
+  fastGap: 1.15,
+  /** 再短一点 + 连击够高 → 火箭档 */
+  rocketGap: 0.9,
+  rocketCombo: 4,
+  /** 加速特效持续时间 */
+  boostHold: 1.35,
+  rocketHold: 1.7,
+  /** 触发加速时额外冲刺米数 */
+  boostBonus: 6,
+  rocketBonus: 14,
 } as const
 
 export function BIKE_LEVELS(): BikeLevel[] {

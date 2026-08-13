@@ -32,6 +32,25 @@ export class ParticleSystem {
     }
   }
 
+  /** 车尾喷火:主要往左喷(车朝右骑) */
+  jet(x: number, y: number, count: number, power = 1, hue = 28): void {
+    for (let i = 0; i < count; i++) {
+      const a = Math.PI + rand(-0.55, 0.55)
+      const sp = rand(180, 520) * power
+      const life = rand(0.18, 0.45)
+      this.items.push({
+        x: x + rand(-4, 4),
+        y: y + rand(-6, 6),
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp * 0.55,
+        life,
+        maxLife: life,
+        size: rand(4, 11) * power,
+        hue: hue + rand(-18, 22),
+      })
+    }
+  }
+
   update(dt: number): void {
     for (let i = this.items.length - 1; i >= 0; i--) {
       const p = this.items[i]

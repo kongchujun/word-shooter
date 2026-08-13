@@ -181,6 +181,8 @@ export const zh = {
   'math.duel.resultLoseTitle': '差一点!',
   'math.duel.retryLose': '再比一局',
   'math.duel.correctCount': '答对题数',
+  'math.duel.boost': '加速!',
+  'math.duel.rocket': '🚀 火箭推进!',
 
   'math.diff.easy': '入门',
   'math.diff.hard': '进阶',
