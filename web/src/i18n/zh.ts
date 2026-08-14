@@ -261,6 +261,9 @@ export const zh = {
   'arena.team.red': '加入红方',
   'arena.team.blue': '加入蓝方',
   'arena.team.join': '进入在线战场',
+  'arena.team.redShort': '红方',
+  'arena.team.blueShort': '蓝方',
+  'arena.hud.health': '生命',
   'arena.menu.walk': '进入战场',
   'arena.menu.walkDesc': '走一走、跳一跳、看看手机撑不撑得住',
   'arena.menu.note':

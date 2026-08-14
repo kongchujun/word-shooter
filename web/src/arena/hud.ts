@@ -21,6 +21,8 @@ export class ArenaHud {
   private magEl: HTMLElement
   private gunEl: HTMLElement
   private scopeEl: HTMLElement
+  private healthEl: HTMLElement
+  private teamEl: HTMLElement
 
   onQuit: () => void = () => {}
 
@@ -29,6 +31,10 @@ export class ArenaHud {
     this.root.className = 'arena-hud'
     this.root.innerHTML = `
       <button class="arena-quit" data-act="quit" type="button">← ${t('game.hud.quitShort')}</button>
+      <div class="arena-player-card">
+        <span data-el="team"></span>
+        <div><label>${t('arena.hud.health')}</label><b data-el="health">100</b><i><u data-el="healthbar"></u></i></div>
+      </div>
       <div class="arena-perf">
         <div><label>FPS</label><b data-el="fps">–</b></div>
         <div><label>${t('arena.perf.low')}</label><b data-el="low">–</b></div>
@@ -63,6 +69,8 @@ export class ArenaHud {
     this.magEl = this.q('mag')
     this.gunEl = this.q('gun')
     this.scopeEl = this.q('scope')
+    this.healthEl = this.q('health')
+    this.teamEl = this.q('team')
 
     this.root.querySelector('[data-act="quit"]')!.addEventListener('click', () => this.onQuit())
   }
@@ -102,6 +110,15 @@ export class ArenaHud {
     this.ammoEl.dataset.tone = reloading ? 'warn' : cur === 0 ? 'bad' : cur <= mag * 0.25 ? 'warn' : 'good'
     this.magEl.textContent = `/${mag}`
     this.gunEl.textContent = gunName
+  }
+
+  setPlayer(team: 'red' | 'blue', hp: number): void {
+    this.teamEl.textContent = team === 'red' ? t('arena.team.redShort') : t('arena.team.blueShort')
+    this.teamEl.dataset.team = team
+    this.healthEl.textContent = String(hp)
+    const bar = this.q('healthbar')
+    bar.style.width = `${Math.max(0, hp)}%`
+    bar.dataset.tone = hp > 50 ? 'good' : hp > 20 ? 'warn' : 'bad'
   }
 
   setHint(text: string): void {

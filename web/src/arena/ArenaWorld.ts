@@ -93,7 +93,7 @@ export class ArenaWorld {
     if (team === 'blue') this.player.yaw = Math.PI / 2
     this.online = new ArenaOnline(team, () => ({x:this.player.pos.x,y:this.player.pos.y,z:this.player.pos.z,yaw:this.player.yaw,pitch:this.player.pitch,moving:Math.hypot(this.player.vel.x,this.player.vel.z)>.2,weapon:this.weapon.id}))
     this.targets = new RemotePlayers(team,(id,head)=>this.online.hit(id,this.weapon.id,head))
-    this.online.onPlayers=(players)=>this.targets.sync(players,this.online.id)
+    this.online.onPlayers=(players)=>{this.targets.sync(players,this.online.id);const me=players.find(p=>p.id===this.online.id);if(me)this.hud.setPlayer(team,me.hp)}
     this.online.onRespawn=(p)=>{this.player.pos.set(p.x,groundY(p.x,p.z),p.z);this.player.vel.set(0,0,0);this.hud.toast(t('arena.toast.respawn'),'good')}
     this.online.onError=()=>this.hud?.setHint(t('arena.hint.offline'))
     this.buildScene()
@@ -103,6 +103,7 @@ export class ArenaWorld {
     this.scene.add(this.camera)
 
     this.hud = new ArenaHud(host)
+    this.hud.setPlayer(team, 100)
     this.hud.onQuit = onQuit
 
     if (this.touchDevice) {
@@ -216,7 +217,7 @@ export class ArenaWorld {
     const speed = Math.hypot(this.player.vel.x, this.player.vel.z)
     this.viewModel.update(dt, speed, this.player.grounded, this.player.yaw - yaw0, this.player.pitch - pitch0)
 
-    this.targets.update(dt)
+    this.targets.update(dt, this.player.yaw)
     this.bullets.update(dt, this.targets, (hit) => this.onHit(hit))
 
     // 准星张开多少 = 这一枪可能偏多少,按视野换算成像素

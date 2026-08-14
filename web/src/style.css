@@ -1360,6 +1360,40 @@ body.with-sidebar .screen {
 .arena-perf b[data-tone='ok'] { color: var(--gold); }
 .arena-perf b[data-tone='bad'] { color: #ff6b6b; }
 
+.arena-player-card {
+  position: absolute;
+  top: max(60px, calc(env(safe-area-inset-top, 0px) + 52px));
+  left: max(12px, env(safe-area-inset-left, 0px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 178px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(8,14,30,.9), rgba(20,30,52,.72));
+  box-shadow: 0 8px 24px rgba(0,0,0,.24);
+  backdrop-filter: blur(8px);
+}
+
+.arena-player-card > span {
+  padding: 6px 9px;
+  border-radius: 8px;
+  color: white;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+.arena-player-card > span[data-team='red'] { background: #c7473b; }
+.arena-player-card > span[data-team='blue'] { background: #3978d2; }
+.arena-player-card > div { flex: 1; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
+.arena-player-card label { color: var(--muted); font-size: 10px; letter-spacing: .08em; }
+.arena-player-card b { font-size: 15px; }
+.arena-player-card i { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.12); }
+.arena-player-card u { display: block; height: 100%; border-radius: inherit; background: #5fd08a; transition: width .15s ease; }
+.arena-player-card u[data-tone='warn'] { background: var(--gold); }
+.arena-player-card u[data-tone='bad'] { background: #ff5f5f; }
+
 /* 准星:四段括号,中间留空 */
 .arena-cross {
   position: absolute;

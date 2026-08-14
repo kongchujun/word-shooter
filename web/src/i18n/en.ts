@@ -265,6 +265,9 @@ export const en: Record<keyof typeof zh, string> = {
   'arena.team.red': 'Join Red',
   'arena.team.blue': 'Join Blue',
   'arena.team.join': 'Enter online battle',
+  'arena.team.redShort': 'RED',
+  'arena.team.blueShort': 'BLUE',
+  'arena.hud.health': 'HEALTH',
   'arena.menu.walk': 'Enter the arena',
   'arena.menu.walkDesc': 'Walk, jump, and see how your phone holds up',
   'arena.menu.note':

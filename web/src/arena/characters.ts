@@ -35,6 +35,8 @@ export class ArenaCharacter {
   private actions = new Map<string, THREE.AnimationAction>()
   private current = ''
   private flashMaterials: (THREE.MeshLambertMaterial | THREE.MeshStandardMaterial)[] = []
+  private smg = new THREE.Group()
+  private sniper = new THREE.Group()
 
   private constructor(source: CharacterSource, teamColor: number) {
     this.root = source.scene.clone(true)
@@ -85,6 +87,11 @@ export class ArenaCharacter {
     for (const mat of this.flashMaterials) mat.emissive.setScalar(k * 0.75)
   }
 
+  setWeapon(id: 'smg' | 'sniper'): void {
+    this.smg.visible = id === 'smg'
+    this.sniper.visible = id === 'sniper'
+  }
+
   private play(name: string, fade = 0.15, once = false): void {
     if (this.current === name) return
     const next = this.actions.get(name)
@@ -127,12 +134,51 @@ export class ArenaCharacter {
     vest.name = 'team-vest'
     this.root.add(vest)
 
-    // 双手前方的一体式橡胶弹枪。做成一个 mesh 而不是机匣/枪管/弹匣六个 mesh:
-    // 八人房里每人少 5 个 draw call,手机上比那点造型细节值钱得多。
-    const gun = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.9), dark)
-    gun.position.set(0, 1.02, -0.48)
-    gun.name = 'rubber-rifle'
-    this.root.add(gun)
+    // 模型原始正面是 +Z，枪也必须放在 +Z；旧版写成 -Z，实际跑到了人物背后。
+    this.smg = this.buildGun('smg', dark, team)
+    this.sniper = this.buildGun('sniper', dark, team)
+    // 不让枪管和玩家视线完全重合：略微斜跨胸前，正面也能看见完整枪身。
+    this.smg.position.set(0.12, 1.45, 0.58)
+    this.sniper.position.set(0.12, 1.47, 0.7)
+    this.smg.scale.setScalar(1.12)
+    this.sniper.scale.setScalar(1.12)
+    this.smg.rotation.set(-0.08, 0.38, -0.03)
+    this.sniper.rotation.set(-0.06, 0.32, -0.02)
+    this.root.add(this.smg, this.sniper)
+    this.setWeapon('smg')
+  }
 
+  private buildGun(id: 'smg' | 'sniper', dark: THREE.Material, team: THREE.Material): THREE.Group {
+    const g = new THREE.Group()
+    g.name = `rubber-${id}`
+    // 枪身沿 Z 轴伸出，造型保持低多边形，但轮廓必须一眼可辨。
+    const receiver = new THREE.Mesh(new THREE.BoxGeometry(id === 'smg' ? 0.22 : 0.2, 0.22, id === 'smg' ? 0.58 : 0.72), dark)
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, id === 'smg' ? 0.46 : 0.92, 8), dark)
+    barrel.rotation.x = Math.PI / 2
+    barrel.position.z = id === 'smg' ? 0.48 : 0.78
+    const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.14, 8), team)
+    muzzle.rotation.x = Math.PI / 2
+    muzzle.position.z = id === 'smg' ? 0.74 : 1.27
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.26, 0.4), dark)
+    stock.position.set(0, -0.02, -0.42)
+    const magazine = new THREE.Mesh(new THREE.BoxGeometry(0.15, id === 'smg' ? 0.38 : 0.24, 0.2), team)
+    magazine.position.set(0, -0.25, 0.02)
+    magazine.rotation.x = id === 'smg' ? -0.18 : 0
+    const sight = new THREE.Mesh(
+      id === 'sniper' ? new THREE.CylinderGeometry(0.105, 0.105, 0.42, 10) : new THREE.BoxGeometry(0.1, 0.1, 0.18),
+      dark,
+    )
+    if (id === 'sniper') sight.rotation.x = Math.PI / 2
+    sight.position.set(0, 0.19, id === 'sniper' ? 0.08 : 0.12)
+    // 两只手明确扣在护木和握把上；即使素材动画不理想，也不会像枪悬空。
+    const gloveMat = new THREE.MeshLambertMaterial({ color: 0xd2a078 })
+    this.flashMaterials.push(gloveMat)
+    const rearHand = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.2), gloveMat)
+    rearHand.position.set(-0.14, -0.02, -0.08)
+    const frontHand = rearHand.clone()
+    frontHand.material = gloveMat
+    frontHand.position.set(0.14, -0.04, id === 'smg' ? 0.34 : 0.48)
+    g.add(receiver, barrel, muzzle, stock, magazine, sight, rearHand, frontHand)
+    return g
   }
 }
