@@ -32,6 +32,8 @@ export class Engine {
   private lastTime = 0
   /** 帧内异常计数,只打前几条,避免 60fps 刷爆控制台 */
   private frameErrors = 0
+  /** 3D 射击场在台上时挂起:那边有自己的 WebGL 画布和循环,这条别白跑 */
+  private suspended = false
 
   constructor(
     readonly canvas: HTMLCanvasElement,
@@ -66,6 +68,17 @@ export class Engine {
     if (s && this.scene === s) this.setScene(null)
   }
 
+  /**
+   * 挂起这条 2D 循环并藏掉画布。给 3D 射击场用 ——
+   * rAF 链本身留着不断(断了要重新拉起来,反而容易漏),只是不 update 也不 draw。
+   */
+  setSuspended(v: boolean): void {
+    this.suspended = v
+    this.canvas.classList.toggle('hidden', v)
+    // 恢复时 lastTime 已经很旧了,清掉免得下一帧算出一个巨大的 dt
+    if (!v) this.lastTime = 0
+  }
+
   // ---------- 画布 ----------
 
   private resize(): void {
@@ -84,6 +97,8 @@ export class Engine {
   private frame(now: number): void {
     // 先排下一帧。放在最后的话,这一帧只要抛一次异常整条 rAF 链就断了,画面永久冻住。
     requestAnimationFrame((t) => this.frame(t))
+
+    if (this.suspended) return
 
     const dt = this.lastTime ? Math.min((now - this.lastTime) / 1000, 1 / 20) : 1 / 60
     this.lastTime = now

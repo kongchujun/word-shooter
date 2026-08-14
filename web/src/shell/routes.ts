@@ -15,3 +15,4 @@ export type ViewId =
   | 'whack/number'
   | 'whack/weekday'
   | 'whack/month'
+  | 'arena'

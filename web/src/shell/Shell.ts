@@ -35,6 +35,7 @@ function nav(): NavItem[] {
       tip: t('nav.whack.tip'),
       children: WHACK_GAMES().map((g) => ({ id: g.view, icon: g.icon, name: g.name, short: g.short })),
     },
+    { id: 'arena', icon: '🎯', name: t('nav.arena'), short: t('nav.arena.short'), tip: t('nav.arena.tip') },
   ]
 }
 
@@ -51,6 +52,7 @@ const ALL_IDS: string[] = [
   'whack/number',
   'whack/weekday',
   'whack/month',
+  'arena',
 ]
 
 /**

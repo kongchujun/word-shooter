@@ -34,6 +34,7 @@ type Server struct {
 	access   *store.AccessStore
 	geo      *geoip.Lookup
 	bike     *store.BikeRaceHub
+	arena    *arenaHub
 
 	openRouter *media.Client
 	tts        *media.TTS
@@ -54,6 +55,7 @@ func New(d Deps) *Server {
 		access:     d.Access,
 		geo:        d.Geo,
 		bike:       store.NewBikeRaceHub(),
+		arena:      newArenaHub(),
 		openRouter: or,
 		tts:        media.NewTTS(or, az),
 		auth:       newAuth(d.Config.AdminUser, d.Config.AdminPass),
@@ -86,6 +88,7 @@ func (s *Server) registerRoutes(e *gin.Engine) {
 
 	// 双人踩单车房间(内存,短轮询)
 	s.registerBikeRace(e)
+	s.registerArena(e)
 
 	admin := e.Group("/api/admin")
 	{
