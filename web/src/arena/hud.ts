@@ -23,6 +23,8 @@ export class ArenaHud {
   private scopeEl: HTMLElement
   private healthEl: HTMLElement
   private teamEl: HTMLElement
+  private deathEl: HTMLElement
+  private respawnEl: HTMLElement
 
   onQuit: () => void = () => {}
 
@@ -45,6 +47,11 @@ export class ArenaHud {
       <div class="arena-cross" data-el="cross" aria-hidden="true"><i></i><i></i><i></i><i></i><u></u></div>
       <div class="arena-scope" data-el="scope" aria-hidden="true"><i></i><b></b></div>
       <div class="arena-toast" data-el="toast"></div>
+      <div class="arena-death" data-el="death">
+        <strong>${t('arena.death.title')}</strong>
+        <span>${t('arena.death.home')}</span>
+        <b data-el="respawn">3</b>
+      </div>
       <div class="arena-ammo">
         <span class="arena-gun" data-el="gun"></span>
         <span class="arena-mag"><b data-el="ammo">0</b><i data-el="mag">/0</i></span>
@@ -71,6 +78,8 @@ export class ArenaHud {
     this.scopeEl = this.q('scope')
     this.healthEl = this.q('health')
     this.teamEl = this.q('team')
+    this.deathEl = this.q('death')
+    this.respawnEl = this.q('respawn')
 
     this.root.querySelector('[data-act="quit"]')!.addEventListener('click', () => this.onQuit())
   }
@@ -119,6 +128,12 @@ export class ArenaHud {
     const bar = this.q('healthbar')
     bar.style.width = `${Math.max(0, hp)}%`
     bar.dataset.tone = hp > 50 ? 'good' : hp > 20 ? 'warn' : 'bad'
+  }
+
+  setDead(dead: boolean, seconds: number): void {
+    this.root.classList.toggle('is-dead', dead)
+    this.deathEl.classList.toggle('show', dead)
+    this.respawnEl.textContent = String(Math.max(0, seconds))
   }
 
   setHint(text: string): void {

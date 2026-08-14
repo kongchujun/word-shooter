@@ -49,6 +49,8 @@ export class ArenaWorld {
   /** 开枪后镜头往上抬的量,会自己回落 */
   private punch = 0
   private baseFov = 74
+  private dead = false
+  private respawnLeft = 0
 
   private raf = 0
   private last = 0
@@ -93,8 +95,22 @@ export class ArenaWorld {
     if (team === 'blue') this.player.yaw = Math.PI / 2
     this.online = new ArenaOnline(team, () => ({x:this.player.pos.x,y:this.player.pos.y,z:this.player.pos.z,yaw:this.player.yaw,pitch:this.player.pitch,moving:Math.hypot(this.player.vel.x,this.player.vel.z)>.2,weapon:this.weapon.id}))
     this.targets = new RemotePlayers(team,(id,head)=>this.online.hit(id,this.weapon.id,head))
-    this.online.onPlayers=(players)=>{this.targets.sync(players,this.online.id);const me=players.find(p=>p.id===this.online.id);if(me)this.hud.setPlayer(team,me.hp)}
-    this.online.onRespawn=(p)=>{this.player.pos.set(p.x,groundY(p.x,p.z),p.z);this.player.vel.set(0,0,0);this.hud.toast(t('arena.toast.respawn'),'good')}
+    this.online.onPlayers=(players)=>{
+      this.targets.sync(players,this.online.id)
+      const me=players.find(p=>p.id===this.online.id)
+      if(!me)return
+      this.hud.setPlayer(team,me.hp)
+      if(me.dead&&!this.dead){
+        this.dead=true;this.respawnLeft=3;this.player.vel.set(0,0,0);this.input.fire=false;this.input.ads=false
+        this.viewModel.root.visible=false;this.hud.setDead(true,3)
+      }else if(!me.dead&&this.dead){
+        this.dead=false;this.respawnLeft=0
+        // 服务端给出的坐标就是本方基地，不能再用距离猜测，否则在基地旁阵亡会漏掉复活。
+        this.player.pos.set(me.x,groundY(me.x,me.z),me.z);this.player.vel.set(0,0,0)
+        this.player.yaw=team==='red'?-Math.PI/2:Math.PI/2;this.player.pitch=0
+        this.viewModel.root.visible=true;this.hud.setDead(false,0);this.hud.toast(t('arena.toast.respawn'),'good')
+      }
+    }
     this.online.onError=()=>this.hud?.setHint(t('arena.hint.offline'))
     this.buildScene()
     this.player.applyTo(this.camera)
@@ -161,7 +177,12 @@ export class ArenaWorld {
     const yaw0 = this.player.yaw
     const pitch0 = this.player.pitch
 
-    this.player.update(dt, this.input, jump)
+    if (!this.dead) this.player.update(dt, this.input, jump)
+    else {
+      this.respawnLeft=Math.max(0,this.respawnLeft-dt)
+      this.hud.setDead(true,Math.ceil(this.respawnLeft))
+      this.input.fire=false;this.input.ads=false
+    }
 
     // 后坐力抬起来的镜头自己回落
     this.punch *= Math.max(0, 1 - dt * 6)
@@ -173,10 +194,10 @@ export class ArenaWorld {
     this.camera.updateMatrixWorld(true)
 
     // 换弹 / 换枪
-    if (this.desktop.takeReload() || this.touch?.takeReload()) this.startReload()
+    if (!this.dead && (this.desktop.takeReload() || this.touch?.takeReload())) this.startReload()
     const sw = this.desktop.takeSwitch() ?? this.touch?.takeSwitch() ?? null
-    if (sw === 'next') this.switchTo(this.weapon.id === 'smg' ? 'sniper' : 'smg')
-    else if (sw) this.switchTo(sw)
+    if (!this.dead && sw === 'next') this.switchTo(this.weapon.id === 'smg' ? 'sniper' : 'smg')
+    else if (!this.dead && sw && sw !== 'next') this.switchTo(sw)
 
     if (this.reloadLeft > 0) {
       this.reloadLeft -= dt
@@ -188,7 +209,7 @@ export class ArenaWorld {
 
     // 扳机
     this.cooldown -= dt
-    if (this.input.fire) {
+    if (!this.dead && this.input.fire) {
       const canRepeat = this.weapon.auto || !this.firedThisPress
       if (canRepeat && this.cooldown <= 0 && this.reloadLeft <= 0) {
         if (this.ammo[this.weapon.id] > 0) {

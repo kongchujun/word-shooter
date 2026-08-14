@@ -1625,6 +1625,26 @@ body.with-sidebar .screen {
 .arena-toast[data-tone='warn'] { color: var(--gold); }
 .arena-toast.show { animation: arena-toast 1.4s ease-out; }
 
+.arena-death {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  background: radial-gradient(circle, rgba(86,12,18,.25), rgba(3,5,10,.82));
+  color: white;
+  text-align: center;
+  pointer-events: none;
+}
+.arena-death.show { display: grid; }
+.arena-death strong { font-size: clamp(28px,5vw,54px); letter-spacing: .06em; text-shadow: 0 3px 20px #000; }
+.arena-death span { color: rgba(255,255,255,.72); font-size: 15px; }
+.arena-death b { display: grid; place-items: center; width: 58px; height: 58px; margin-top: 8px; border: 2px solid rgba(255,255,255,.7); border-radius: 50%; font-size: 28px; }
+.arena-hud.is-dead .arena-cross,
+.arena-hud.is-dead .arena-scope,
+.arena-hud.is-dead .arena-ammo { display: none; }
+
 @keyframes arena-toast {
   0% { opacity: 0; transform: translate(-50%, 8px); }
   15% { opacity: 1; transform: translate(-50%, 0); }

@@ -264,6 +264,8 @@ export const zh = {
   'arena.team.redShort': '红方',
   'arena.team.blueShort': '蓝方',
   'arena.hud.health': '生命',
+  'arena.death.title': '你被击倒了',
+  'arena.death.home': '正在返回本方基地',
   'arena.menu.walk': '进入战场',
   'arena.menu.walkDesc': '走一走、跳一跳、看看手机撑不撑得住',
   'arena.menu.note':

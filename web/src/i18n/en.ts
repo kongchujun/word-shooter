@@ -268,6 +268,8 @@ export const en: Record<keyof typeof zh, string> = {
   'arena.team.redShort': 'RED',
   'arena.team.blueShort': 'BLUE',
   'arena.hud.health': 'HEALTH',
+  'arena.death.title': 'YOU WERE KNOCKED OUT',
+  'arena.death.home': 'Returning to your base',
   'arena.menu.walk': 'Enter the arena',
   'arena.menu.walkDesc': 'Walk, jump, and see how your phone holds up',
   'arena.menu.note':
