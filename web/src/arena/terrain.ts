@@ -93,6 +93,26 @@ const CRATES: [number, number][] = [
   [0, -52], [0, 52], [-14, -34], [14, 34],
 ]
 
+interface DetailSpot { x:number; z:number; scale:number }
+const TREE_SPOTS: DetailSpot[] = Array.from({length:30},(_,i)=>({x:-75+(i*37%150),z:(i%2?-1:1)*(63+(i*11%22)),scale:.8+(i%5)*.07}))
+const ROCK_SPOTS: DetailSpot[] = Array.from({length:24},(_,i)=>({x:-70+(i*53%140),z:(i%2?-1:1)*(48+(i*17%38)),scale:1+(i%4)*.35}))
+const SANDBAG_SPOTS = [-48,-24,24,48].flatMap(x=>[-36,0,36].flatMap(z=>[-1,0,1].map(j=>({x,z:z+j*1.15}))))
+
+export type ArenaObstacle =
+  | {kind:'circle';x:number;z:number;radius:number}
+  | {kind:'box';x:number;z:number;halfX:number;halfZ:number}
+
+/** 和视觉物件共用同一批坐标，避免“看得到的石头”和碰撞体错位。 */
+export function obstacleColliders(): ArenaObstacle[] {
+  return [
+    ...TREE_SPOTS.map(p=>({kind:'circle' as const,x:p.x,z:p.z,radius:.48*p.scale})),
+    ...ROCK_SPOTS.map(p=>({kind:'circle' as const,x:p.x,z:p.z,radius:.9*p.scale})),
+    ...SANDBAG_SPOTS.map(p=>({kind:'box' as const,x:p.x,z:p.z,halfX:.82,halfZ:.43})),
+    ...([-ARENA.baseX,ARENA.baseX].flatMap(x=>[-7,7].map(z=>({kind:'box' as const,x,z,halfX:4,halfZ:.5})))),
+    {kind:'circle',x:0,z:0,radius:.55},
+  ]
+}
+
 /** 掩体:一个 InstancedMesh 画完十几个箱子,只占一次 draw call */
 export function buildCrates(): THREE.InstancedMesh {
   const geo = new THREE.BoxGeometry(2.4, 2.4, 2.4)
@@ -198,8 +218,8 @@ export function buildBattlefieldDetails(): THREE.Group {
   const bagGeo = new THREE.CapsuleGeometry(.42, 1.1, 2, 6); bagGeo.rotateZ(Math.PI/2)
   const bags = new THREE.InstancedMesh(bagGeo,new THREE.MeshLambertMaterial({color:0x9b845d}),36)
   const m=new THREE.Matrix4(),q=new THREE.Quaternion(),s=new THREE.Vector3(1,1,1);let n=0
-  for(const x of[-48,-24,24,48])for(const z of[-36,0,36])for(let j=0;j<3;j++){
-    const px=x,pz=z+(j-1)*1.15;m.compose(new THREE.Vector3(px,groundY(px,pz)+.42,pz),q,s);bags.setMatrixAt(n++,m)
+  for(const p of SANDBAG_SPOTS){
+    m.compose(new THREE.Vector3(p.x,groundY(p.x,p.z)+.42,p.z),q,s);bags.setMatrixAt(n++,m)
   }
   bags.count=n;bags.instanceMatrix.needsUpdate=true;g.add(bags)
 
@@ -207,18 +227,18 @@ export function buildBattlefieldDetails(): THREE.Group {
   const trunkGeo=new THREE.CylinderGeometry(.28,.48,3.4,6), crownGeo=new THREE.ConeGeometry(2.1,5.2,7)
   const trunks=new THREE.InstancedMesh(trunkGeo,new THREE.MeshLambertMaterial({color:0x705137}),30)
   const crowns=new THREE.InstancedMesh(crownGeo,new THREE.MeshLambertMaterial({color:0x3f7445}),30)
-  for(let i=0;i<30;i++){
-    const side=i%2?-1:1;const x=-75+(i*37%150);const z=side*(63+(i*11%22));const y=groundY(x,z)
+  TREE_SPOTS.forEach((p,i)=>{
+    const {x,z}=p,y=groundY(x,z)
     m.compose(new THREE.Vector3(x,y+1.7,z),q,s);trunks.setMatrixAt(i,m)
-    const k=.8+(i%5)*.07;m.compose(new THREE.Vector3(x,y+5,z),q,new THREE.Vector3(k,k,k));crowns.setMatrixAt(i,m)
-  }
+    const k=p.scale;m.compose(new THREE.Vector3(x,y+5,z),q,new THREE.Vector3(k,k,k));crowns.setMatrixAt(i,m)
+  })
   trunks.instanceMatrix.needsUpdate=true;crowns.instanceMatrix.needsUpdate=true;g.add(trunks,crowns)
 
   const rockGeo=new THREE.DodecahedronGeometry(1,0),rocks=new THREE.InstancedMesh(rockGeo,new THREE.MeshLambertMaterial({color:0x6d736d}),24)
-  for(let i=0;i<24;i++){
-    const x=-70+(i*53%140),z=(i%2?-1:1)*(48+(i*17%38)),y=groundY(x,z)
-    q.setFromEuler(new THREE.Euler(i*.7,i*.31,0));const k=1+(i%4)*.35;m.compose(new THREE.Vector3(x,y+.7*k,z),q,new THREE.Vector3(k,0.72*k,1.3*k));rocks.setMatrixAt(i,m)
-  }
+  ROCK_SPOTS.forEach((p,i)=>{
+    const {x,z}=p,y=groundY(x,z),k=p.scale
+    q.setFromEuler(new THREE.Euler(i*.7,i*.31,0));m.compose(new THREE.Vector3(x,y+.7*k,z),q,new THREE.Vector3(k,0.72*k,1.3*k));rocks.setMatrixAt(i,m)
+  })
   rocks.instanceMatrix.needsUpdate=true;g.add(rocks)
   return g
 }

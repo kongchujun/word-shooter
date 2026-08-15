@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { InputState } from './controls'
-import { ARENA, crateBoxes, groundY } from './terrain'
+import { ARENA, crateBoxes, groundY, obstacleColliders } from './terrain'
 
 /** 手感参数,调走路跳跃只改这里 */
 export const PLAYER = {
@@ -23,6 +23,7 @@ export const PLAYER = {
 } as const
 
 const boxes = crateBoxes()
+const obstacles = obstacleColliders()
 
 /**
  * 第一人称角色。一个胶囊在高度场上跑,没有物理引擎:
@@ -82,6 +83,7 @@ export class Player {
     this.pos.y += this.vel.y * dt
 
     this.resolveCrates()
+    this.resolveObstacles()
     this.clampToArena()
 
     const floor = this.floorAt(this.pos.x, this.pos.z)
@@ -121,6 +123,27 @@ export class Player {
         this.pos.z = b.z + Math.sign(dz || 1) * r
         this.vel.z = 0
       }
+    }
+  }
+
+  /** 石头/树用圆形推出，墙和沙袋按盒子推出；保留切向速度，人物会顺着边缘滑动。 */
+  private resolveObstacles(): void {
+    for (const o of obstacles) {
+      if (o.kind === 'circle') {
+        const dx=this.pos.x-o.x,dz=this.pos.z-o.z
+        const min=o.radius+PLAYER.radius,dist2=dx*dx+dz*dz
+        if(dist2>=min*min)continue
+        const dist=Math.sqrt(dist2)||.001,nx=dx/dist,nz=dz/dist
+        this.pos.x=o.x+nx*min;this.pos.z=o.z+nz*min
+        const inward=this.vel.x*nx+this.vel.z*nz
+        if(inward<0){this.vel.x-=inward*nx;this.vel.z-=inward*nz}
+        continue
+      }
+      const rx=o.halfX+PLAYER.radius,rz=o.halfZ+PLAYER.radius
+      const dx=this.pos.x-o.x,dz=this.pos.z-o.z
+      if(Math.abs(dx)>=rx||Math.abs(dz)>=rz)continue
+      if(rx-Math.abs(dx)<rz-Math.abs(dz)){this.pos.x=o.x+Math.sign(dx||1)*rx;this.vel.x=0}
+      else{this.pos.z=o.z+Math.sign(dz||1)*rz;this.vel.z=0}
     }
   }
 
