@@ -28,6 +28,8 @@ type arenaPlayer struct {
 	Token     string    `json:"-"`
 	Seen      time.Time `json:"-"`
 	RespawnAt time.Time `json:"-"`
+	// 复活后的第一次 sync 必须先把基地坐标发给客户端，不能被请求里的死亡旧坐标覆盖。
+	Respawned bool      `json:"-"`
 	LastHit   time.Time `json:"-"`
 }
 type arenaHub struct {
@@ -66,6 +68,7 @@ func (h *arenaHub) clean(now time.Time) {
 			p.X = spawn(p.Team)
 			p.Y = 0
 			p.Z = 0
+			p.Respawned = true
 		}
 	}
 }
@@ -140,7 +143,7 @@ func (s *Server) arenaSync(c *gin.Context) {
 		return
 	}
 	p.Seen = now
-	if !p.Dead && finite(in.X) && finite(in.Y) && finite(in.Z) && finite(in.Yaw) && finite(in.Pitch) {
+	if !p.Dead && !p.Respawned && finite(in.X) && finite(in.Y) && finite(in.Z) && finite(in.Yaw) && finite(in.Pitch) {
 		p.X = clamp(in.X, -99, 99)
 		p.Y = clamp(in.Y, -5, 30)
 		p.Z = clamp(in.Z, -99, 99)
@@ -151,7 +154,10 @@ func (s *Server) arenaSync(c *gin.Context) {
 			p.Weapon = in.Weapon
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"players": s.arena.snapshot(now)})
+	players := s.arena.snapshot(now)
+	// 响应已经包含基地坐标；下一次同步客户端会回传这个新位置，可以恢复正常接收。
+	p.Respawned = false
+	c.JSON(http.StatusOK, gin.H{"players": players})
 }
 
 func (s *Server) arenaHit(c *gin.Context) {
