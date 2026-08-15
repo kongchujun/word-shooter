@@ -3,7 +3,7 @@ import { t } from '../i18n'
 import { DesktopControls, emptyInput, isCoarsePointer, TouchControls } from './controls'
 import { ArenaHud } from './hud'
 import { Player } from './player'
-import { ARENA, buildBase, buildCrates, buildSky, buildTerrain, buildWalls, groundY, SKY } from './terrain'
+import { ARENA, buildBase, buildBattlefieldDetails, buildCrates, buildSky, buildTerrain, buildWalls, groundY, SKY } from './terrain'
 import { ViewModel } from './viewmodel'
 import { Bullets } from './bullets'
 import type { TargetHit } from './targets'
@@ -299,6 +299,7 @@ export class ArenaWorld {
     this.scene.add(buildWalls())
     this.scene.add(buildBase('red'))
     this.scene.add(buildBase('blue'))
+    this.scene.add(buildBattlefieldDetails())
     this.scene.add(buildSky())
     this.scene.add(this.targets.group)
     this.scene.add(this.bullets.group)

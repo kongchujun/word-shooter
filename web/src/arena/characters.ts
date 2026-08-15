@@ -127,6 +127,21 @@ export class ArenaCharacter {
     team.emissive = new THREE.Color(0)
     this.flashMaterials.push(dark, team)
 
+    // 头盔、肩甲、背包和护膝强化士兵轮廓；队色只放关键面，避免整个人像塑料玩具。
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(.34,10,6,0,Math.PI*2,0,Math.PI*.62), dark)
+    helmet.position.set(0,1.92,0);helmet.scale.z=.9
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(.48,.1,.08), team)
+    visor.position.set(0,1.86,.29)
+    const backpack = new THREE.Mesh(new THREE.BoxGeometry(.58,.65,.24), dark)
+    backpack.position.set(0,1.02,-.32)
+    const shoulderGeo = new THREE.BoxGeometry(.22,.18,.42)
+    const shoulderL=new THREE.Mesh(shoulderGeo,team),shoulderR=shoulderL.clone()
+    shoulderL.position.set(-.48,1.35,0);shoulderR.position.set(.48,1.35,0)
+    const kneeGeo=new THREE.BoxGeometry(.26,.18,.16)
+    const kneeL=new THREE.Mesh(kneeGeo,dark),kneeR=kneeL.clone()
+    kneeL.position.set(-.2,.42,.16);kneeR.position.set(.2,.42,.16)
+    this.root.add(helmet,visor,backpack,shoulderL,shoulderR,kneeL,kneeR)
+
     // 薄薄一层防护背心,不是原先把整个人包住的方盒。
     // 躯干材质本身也有队色,这层负责让 50 米外仍能分清红蓝。
     const vest = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.42), team)

@@ -68,6 +68,10 @@ export function buildTerrain(): THREE.Mesh {
     const steep = THREE.MathUtils.clamp((1 - normal.getY(i)) * 6, 0, 1)
     const high = THREE.MathUtils.clamp((y - 8) / 10, 0, 1)
     c.copy(grass).lerp(dirt, steep).lerp(peak, high * 0.55)
+    // 三条进攻路线压出偏暖的土色，玩家不用小地图也能读懂战场。
+    const lane = Math.min(Math.abs(pos.getZ(i)), Math.abs(pos.getZ(i) - 36), Math.abs(pos.getZ(i) + 36))
+    const road = 1 - THREE.MathUtils.smoothstep(lane, 4.5, 8)
+    c.lerp(new THREE.Color(0x9a8155), road * 0.48)
     // 每个顶点抖一点亮度,平面上才有细节
     const n = 0.92 + ((Math.sin(pos.getX(i) * 1.7) + Math.cos(pos.getZ(i) * 2.3)) * 0.5 + 0.5) * 0.16
     colors[i * 3] = c.r * n
@@ -149,8 +153,73 @@ export function buildBase(team: 'red' | 'blue'): THREE.Group {
   flag.position.set(x + 1.5, groundY(x, 0) + 8, 0)
   g.add(flag)
 
+  // 半开放基地建筑：有屋顶、有门洞和灯带，比一块圆盘更像真正的“家”。
+  const wallMat = new THREE.MeshLambertMaterial({ color: team === 'red' ? 0x713d38 : 0x344f75 })
+  const roofMat = new THREE.MeshLambertMaterial({ color: 0x263241 })
+  for (const z of [-7, 7]) {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(8, 3.2, 1), wallMat)
+    wall.position.set(x, groundY(x, z) + 1.6, z)
+    g.add(wall)
+  }
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(10, 0.45, 16), roofMat)
+  roof.position.set(x, groundY(x, 0) + 4.1, 0)
+  g.add(roof)
+  const light = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 10.2), new THREE.MeshBasicMaterial({ color }))
+  light.position.set(x + (team === 'red' ? 5.1 : -5.1), groundY(x, 0) + 3.45, 0)
+  g.add(light)
+
   g.matrixAutoUpdate = false
   g.updateMatrix()
+  return g
+}
+
+/** 战场细节：中央通讯站、路线标记、树林、岩石和沙袋。全部是低模与实例化。 */
+export function buildBattlefieldDetails(): THREE.Group {
+  const g = new THREE.Group()
+  const metal = new THREE.MeshLambertMaterial({ color: 0x394756 })
+  const concrete = new THREE.MeshLambertMaterial({ color: 0x7e8580 })
+  const orange = new THREE.MeshLambertMaterial({ color: 0xd8943d })
+
+  // 山顶通讯站是全图视觉锚点，同时给狙击手提供有风险的制高点。
+  const summit = groundY(0, 0)
+  const platform = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 7.5, 1, 10), concrete)
+  platform.position.set(0, summit + .5, 0)
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(.22, .38, 13, 8), metal)
+  mast.position.set(0, summit + 7, 0)
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.1, .16, 6, 16), orange)
+  ring.position.set(0, summit + 10, 0); ring.rotation.x = Math.PI / 2
+  g.add(platform, mast, ring)
+  for (let i=0;i<3;i++) {
+    const dish = new THREE.Mesh(new THREE.CylinderGeometry(1.25,.25,.35,12),new THREE.MeshLambertMaterial({color:0xd7dde0}))
+    const a=i*Math.PI*2/3;dish.position.set(Math.cos(a)*1.1,summit+8-i*.7,Math.sin(a)*1.1);dish.rotation.set(Math.PI/2,a,0);g.add(dish)
+  }
+
+  // 沙袋墙把中央路线切成短交火距离，避免一眼从家打到家。
+  const bagGeo = new THREE.CapsuleGeometry(.42, 1.1, 2, 6); bagGeo.rotateZ(Math.PI/2)
+  const bags = new THREE.InstancedMesh(bagGeo,new THREE.MeshLambertMaterial({color:0x9b845d}),36)
+  const m=new THREE.Matrix4(),q=new THREE.Quaternion(),s=new THREE.Vector3(1,1,1);let n=0
+  for(const x of[-48,-24,24,48])for(const z of[-36,0,36])for(let j=0;j<3;j++){
+    const px=x,pz=z+(j-1)*1.15;m.compose(new THREE.Vector3(px,groundY(px,pz)+.42,pz),q,s);bags.setMatrixAt(n++,m)
+  }
+  bags.count=n;bags.instanceMatrix.needsUpdate=true;g.add(bags)
+
+  // 外圈植被只负责塑造边界和纵深，不放到主交火路线上。
+  const trunkGeo=new THREE.CylinderGeometry(.28,.48,3.4,6), crownGeo=new THREE.ConeGeometry(2.1,5.2,7)
+  const trunks=new THREE.InstancedMesh(trunkGeo,new THREE.MeshLambertMaterial({color:0x705137}),30)
+  const crowns=new THREE.InstancedMesh(crownGeo,new THREE.MeshLambertMaterial({color:0x3f7445}),30)
+  for(let i=0;i<30;i++){
+    const side=i%2?-1:1;const x=-75+(i*37%150);const z=side*(63+(i*11%22));const y=groundY(x,z)
+    m.compose(new THREE.Vector3(x,y+1.7,z),q,s);trunks.setMatrixAt(i,m)
+    const k=.8+(i%5)*.07;m.compose(new THREE.Vector3(x,y+5,z),q,new THREE.Vector3(k,k,k));crowns.setMatrixAt(i,m)
+  }
+  trunks.instanceMatrix.needsUpdate=true;crowns.instanceMatrix.needsUpdate=true;g.add(trunks,crowns)
+
+  const rockGeo=new THREE.DodecahedronGeometry(1,0),rocks=new THREE.InstancedMesh(rockGeo,new THREE.MeshLambertMaterial({color:0x6d736d}),24)
+  for(let i=0;i<24;i++){
+    const x=-70+(i*53%140),z=(i%2?-1:1)*(48+(i*17%38)),y=groundY(x,z)
+    q.setFromEuler(new THREE.Euler(i*.7,i*.31,0));const k=1+(i%4)*.35;m.compose(new THREE.Vector3(x,y+.7*k,z),q,new THREE.Vector3(k,0.72*k,1.3*k));rocks.setMatrixAt(i,m)
+  }
+  rocks.instanceMatrix.needsUpdate=true;g.add(rocks)
   return g
 }
 

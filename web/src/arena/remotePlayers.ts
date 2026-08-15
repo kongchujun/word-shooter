@@ -9,9 +9,10 @@ class RemoteAvatar {
   private hpFill:THREE.Mesh; private bar:THREE.Group
   constructor(p:NetPlayer){
     this.state=p;this.group.position.set(p.x,p.y,p.z);this.target.copy(this.group.position)
-    const bar=new THREE.Group();this.bar=bar;bar.position.y=2.35
-    const back=new THREE.Mesh(new THREE.PlaneGeometry(1.05,.13),new THREE.MeshBasicMaterial({color:0x241d25,depthTest:false}))
-    this.hpFill=new THREE.Mesh(new THREE.PlaneGeometry(1,.085),new THREE.MeshBasicMaterial({color:0xff5f5f,depthTest:false}))
+    const bar=new THREE.Group();this.bar=bar;bar.position.y=2.62;bar.renderOrder=20
+    const back=new THREE.Mesh(new THREE.PlaneGeometry(1.05,.13),new THREE.MeshBasicMaterial({color:0x241d25,depthTest:false,depthWrite:false}))
+    this.hpFill=new THREE.Mesh(new THREE.PlaneGeometry(1,.085),new THREE.MeshBasicMaterial({color:0xff5f5f,depthTest:false,depthWrite:false}))
+    back.renderOrder=20;this.hpFill.renderOrder=21
     this.hpFill.position.z=.006;bar.add(back,this.hpFill);this.group.add(bar)
     void ArenaCharacter.create(p.team==='red'?0xe85d4c:0x4d8dff).then(c=>{this.character=c;c.setWeapon(p.weapon);this.group.add(c.root)})
   }
