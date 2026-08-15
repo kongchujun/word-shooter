@@ -49,13 +49,19 @@ export class ArenaCharacter {
     this.root.traverse((obj) => {
       const mesh = obj as THREE.Mesh
       if (!mesh.isMesh) return
+      const part = [obj.name, obj.parent?.name, obj.parent?.parent?.name].filter(Boolean).join('/')
+      // 素材自带的是胡子男性脸；本项目角色改为自定义动漫头部，原头部网格必须隐藏。
+      if (part.includes('head')) {
+        mesh.visible = false
+        return
+      }
       mesh.castShadow = false
       mesh.receiveShadow = false
       // 每个实例要独立闪白,材质不能和其他人共用。
       if (Array.isArray(mesh.material)) {
-        mesh.material = mesh.material.map((m) => this.cloneMaterial(m, obj.name, teamColor))
+        mesh.material = mesh.material.map((m) => this.cloneMaterial(m, part))
       } else {
-        mesh.material = this.cloneMaterial(mesh.material, obj.name, teamColor)
+        mesh.material = this.cloneMaterial(mesh.material, part)
       }
     })
 
@@ -110,12 +116,13 @@ export class ArenaCharacter {
     this.current = name
   }
 
-  private cloneMaterial(material: THREE.Material, part: string, teamColor: number): THREE.Material {
+  private cloneMaterial(material: THREE.Material, part: string): THREE.Material {
     const clone = material.clone()
     if (clone instanceof THREE.MeshLambertMaterial || clone instanceof THREE.MeshStandardMaterial) {
       this.flashMaterials.push(clone)
       // 不再另外套一个盒子背心:直接给躯干贴图染队色,省掉每个人一个 draw call。
-      if (part === 'torso') clone.color.lerp(new THREE.Color(teamColor), 0.72)
+      if (part.includes('torso') || part.includes('arm-')) { clone.color.set(0x263b61); clone.map=null; clone.needsUpdate=true }
+      if (part.includes('leg-')) { clone.color.set(0x182238); clone.map=null; clone.needsUpdate=true }
     }
     return clone
   }
@@ -127,20 +134,30 @@ export class ArenaCharacter {
     team.emissive = new THREE.Color(0)
     this.flashMaterials.push(dark, team)
 
-    // 头盔、肩甲、背包和护膝强化士兵轮廓；队色只放关键面，避免整个人像塑料玩具。
-    const helmet = new THREE.Mesh(new THREE.SphereGeometry(.34,10,6,0,Math.PI*2,0,Math.PI*.62), dark)
-    helmet.position.set(0,1.92,0);helmet.scale.z=.9
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(.48,.1,.08), team)
-    visor.position.set(0,1.86,.29)
-    const backpack = new THREE.Mesh(new THREE.BoxGeometry(.58,.65,.24), dark)
-    backpack.position.set(0,1.02,-.32)
-    const shoulderGeo = new THREE.BoxGeometry(.22,.18,.42)
-    const shoulderL=new THREE.Mesh(shoulderGeo,team),shoulderR=shoulderL.clone()
-    shoulderL.position.set(-.48,1.35,0);shoulderR.position.set(.48,1.35,0)
-    const kneeGeo=new THREE.BoxGeometry(.26,.18,.16)
-    const kneeL=new THREE.Mesh(kneeGeo,dark),kneeR=kneeL.clone()
-    kneeL.position.set(-.2,.42,.16);kneeR.position.set(.2,.42,.16)
-    this.root.add(helmet,visor,backpack,shoulderL,shoulderR,kneeL,kneeR)
+    this.addAnimeHead(team)
+
+    const white = new THREE.MeshLambertMaterial({ color: 0xe8edf2 })
+    const orange = new THREE.MeshLambertMaterial({ color: 0xe99a36 })
+    const navy = new THREE.MeshLambertMaterial({ color: 0x263b61 })
+    this.flashMaterials.push(white, orange, navy)
+
+    // 长外套的前襟、白边、橙色领带和百褶裙是参考图最醒目的服装语言。
+    const coat = new THREE.Mesh(new THREE.BoxGeometry(.68,.72,.38), navy)
+    coat.position.set(0,1.08,.01)
+    const lapelL = new THREE.Mesh(new THREE.BoxGeometry(.08,.5,.035), white)
+    const lapelR = lapelL.clone();lapelL.position.set(-.25,1.08,.215);lapelR.position.set(.25,1.08,.215)
+    lapelL.rotation.z=-.12;lapelR.rotation.z=.12
+    const tie = new THREE.Mesh(new THREE.BoxGeometry(.13,.43,.055), orange)
+    tie.position.set(0,1.28,.24);tie.rotation.z=.02
+    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(.34,.58,.43,12,1,true), navy)
+    skirt.position.set(0,.68,0)
+    // 裙摆白边单独一圈，远距离仍看得出不是普通裤装。
+    const hem = new THREE.Mesh(new THREE.TorusGeometry(.57,.035,5,12), white)
+    hem.position.set(0,.47,0);hem.rotation.x=Math.PI/2
+    // 袖章是唯一大面积队色，红蓝双方仍能快速辨认。
+    const armbandL=new THREE.Mesh(new THREE.BoxGeometry(.08,.18,.32),team),armbandR=armbandL.clone()
+    armbandL.position.set(-.52,1.22,0);armbandR.position.set(.52,1.22,0)
+    this.root.add(coat,lapelL,lapelR,tie,skirt,hem,armbandL,armbandR)
 
     // 薄薄一层防护背心,不是原先把整个人包住的方盒。
     // 躯干材质本身也有队色,这层负责让 50 米外仍能分清红蓝。
@@ -161,6 +178,32 @@ export class ArenaCharacter {
     this.sniper.rotation.set(-0.06, 0.32, -0.02)
     this.root.add(this.smg, this.sniper)
     this.setWeapon('smg')
+  }
+
+  private addAnimeHead(team: THREE.Material): void {
+    const skin = new THREE.MeshBasicMaterial({ color: 0xffddcb })
+    const hair = new THREE.MeshLambertMaterial({ color: 0xffcf82 })
+    const hairShade = new THREE.MeshLambertMaterial({ color: 0xd99467 })
+    const eye = new THREE.MeshBasicMaterial({ color: 0x8e3c78 })
+    this.flashMaterials.push(hair, hairShade)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(.36,12,9),skin)
+    head.position.set(0,1.78,0);head.scale.set(1,.96,.9)
+    // 发帽覆盖后脑，刘海用三束倾斜的锥体形成动漫轮廓。
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(.385,12,8,0,Math.PI*2,0,Math.PI*.64),hair)
+    cap.position.set(0,1.86,-.05)
+    const bangGeo=new THREE.ConeGeometry(.075,.3,6)
+    for(const [x,r] of [[-.18,-.28],[0,-.05],[.18,.24]] as const){const b=new THREE.Mesh(bangGeo,hair);b.position.set(x,1.94,.3);b.rotation.z=r;b.rotation.x=-.08;this.root.add(b)}
+    // 高马尾由发结和两节发束组成，跑动时整体随人物动画移动。
+    const knot=new THREE.Mesh(new THREE.SphereGeometry(.16,8,6),hairShade);knot.position.set(0,1.9,-.35)
+    const pony1=new THREE.Mesh(new THREE.ConeGeometry(.18,.72,7),hair);pony1.position.set(.08,2.17,-.48);pony1.rotation.z=-.42
+    const pony2=new THREE.Mesh(new THREE.ConeGeometry(.13,.58,7),hairShade);pony2.position.set(.3,2.43,-.52);pony2.rotation.z=-.72
+    const eyeGeo=new THREE.SphereGeometry(.055,8,6)
+    const leftEye=new THREE.Mesh(eyeGeo,eye),rightEye=leftEye.clone();leftEye.scale.z=.25;rightEye.scale.z=.25
+    leftEye.position.set(-.13,1.8,.325);rightEye.position.set(.13,1.8,.325)
+    const mouth=new THREE.Mesh(new THREE.BoxGeometry(.09,.025,.02),new THREE.MeshBasicMaterial({color:0xa94c62}));mouth.position.set(0,1.66,.337)
+    // 小发带沿用队色，既贴近参考图的发饰，也增强阵营识别。
+    const ribbon=new THREE.Mesh(new THREE.TorusGeometry(.17,.035,5,10),team);ribbon.position.set(0,1.94,-.38);ribbon.rotation.x=Math.PI/2
+    this.root.add(head,cap,knot,pony1,pony2,leftEye,rightEye,mouth,ribbon)
   }
 
   private buildGun(id: 'smg' | 'sniper', dark: THREE.Material, team: THREE.Material): THREE.Group {
