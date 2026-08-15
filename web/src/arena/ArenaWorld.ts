@@ -51,6 +51,7 @@ export class ArenaWorld {
   private baseFov = 74
   private dead = false
   private respawnLeft = 0
+  private remoteShotSeq = new Map<string,number>()
 
   private raf = 0
   private last = 0
@@ -97,6 +98,14 @@ export class ArenaWorld {
     this.targets = new RemotePlayers(team,(id,head)=>this.online.hit(id,this.weapon.id,head))
     this.online.onPlayers=(players)=>{
       this.targets.sync(players,this.online.id)
+      for(const p of players){
+        if(p.id===this.online.id||p.team===team)continue
+        const seen=this.remoteShotSeq.get(p.id)??0
+        if(p.shotSeq>seen){
+          this.remoteShotSeq.set(p.id,p.shotSeq)
+          if(Date.now()-p.shotAt<800&&WEAPONS[p.shotWeapon])this.bullets.spawnRemote(new THREE.Vector3(p.shotX,p.shotY,p.shotZ),new THREE.Vector3(p.shotDX,p.shotDY,p.shotDZ),WEAPONS[p.shotWeapon])
+        }
+      }
       const me=players.find(p=>p.id===this.online.id)
       if(!me)return
       this.hud.setPlayer(team,me.hp,me.number)
@@ -326,6 +335,7 @@ export class ArenaWorld {
     // 从枪口出膛,不是从眼睛 —— 不然贴着箱子打会穿墙
     const muzzle = this.viewModel.muzzleWorld()
     this.bullets.spawn(muzzle, dir, w)
+    this.online.shot(muzzle, dir, w.id)
 
     this.viewModel.fire(w.kick)
     this.punch += w.punch

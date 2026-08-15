@@ -14,21 +14,30 @@ import (
 const arenaTTL = 12 * time.Second
 
 type arenaPlayer struct {
-	ID        string    `json:"id"`
-	Team      string    `json:"team"`
-	Number    int       `json:"number"`
-	X         float64   `json:"x"`
-	Y         float64   `json:"y"`
-	Z         float64   `json:"z"`
-	Yaw       float64   `json:"yaw"`
-	Pitch     float64   `json:"pitch"`
-	HP        int       `json:"hp"`
-	Dead      bool      `json:"dead"`
-	Moving    bool      `json:"moving"`
-	Weapon    string    `json:"weapon"`
-	Token     string    `json:"-"`
-	Seen      time.Time `json:"-"`
-	RespawnAt time.Time `json:"-"`
+	ID         string    `json:"id"`
+	Team       string    `json:"team"`
+	Number     int       `json:"number"`
+	X          float64   `json:"x"`
+	Y          float64   `json:"y"`
+	Z          float64   `json:"z"`
+	Yaw        float64   `json:"yaw"`
+	Pitch      float64   `json:"pitch"`
+	HP         int       `json:"hp"`
+	Dead       bool      `json:"dead"`
+	Moving     bool      `json:"moving"`
+	Weapon     string    `json:"weapon"`
+	ShotSeq    int       `json:"shotSeq"`
+	ShotAt     int64     `json:"shotAt"`
+	ShotX      float64   `json:"shotX"`
+	ShotY      float64   `json:"shotY"`
+	ShotZ      float64   `json:"shotZ"`
+	ShotDX     float64   `json:"shotDX"`
+	ShotDY     float64   `json:"shotDY"`
+	ShotDZ     float64   `json:"shotDZ"`
+	ShotWeapon string    `json:"shotWeapon"`
+	Token      string    `json:"-"`
+	Seen       time.Time `json:"-"`
+	RespawnAt  time.Time `json:"-"`
 	// 复活后的第一次 sync 必须先把基地坐标发给客户端，不能被请求里的死亡旧坐标覆盖。
 	Respawned bool      `json:"-"`
 	LastHit   time.Time `json:"-"`
@@ -45,7 +54,37 @@ func (s *Server) registerArena(e *gin.Engine) {
 	e.POST("/api/arena/join", s.arenaJoin)
 	e.POST("/api/arena/sync", s.arenaSync)
 	e.POST("/api/arena/hit", s.arenaHit)
+	e.POST("/api/arena/shot", s.arenaShot)
 	e.POST("/api/arena/leave", s.arenaLeave)
+}
+
+func (s *Server) arenaShot(c *gin.Context) {
+	var in struct {
+		ID, Token, Weapon   string
+		X, Y, Z, DX, DY, DZ float64
+	}
+	if c.ShouldBindJSON(&in) != nil || (in.Weapon != "smg" && in.Weapon != "sniper") ||
+		!finite(in.X) || !finite(in.Y) || !finite(in.Z) || !finite(in.DX) || !finite(in.DY) || !finite(in.DZ) {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+	s.arena.mu.Lock()
+	defer s.arena.mu.Unlock()
+	p := s.arena.players[in.ID]
+	if p == nil || p.Token != in.Token || p.Dead {
+		c.Status(http.StatusUnauthorized)
+		return
+	}
+	p.ShotSeq++
+	p.ShotAt = time.Now().UnixMilli()
+	p.ShotX = in.X
+	p.ShotY = in.Y
+	p.ShotZ = in.Z
+	p.ShotDX = in.DX
+	p.ShotDY = in.DY
+	p.ShotDZ = in.DZ
+	p.ShotWeapon = in.Weapon
+	c.Status(http.StatusNoContent)
 }
 
 func token() string { b := make([]byte, 16); _, _ = rand.Read(b); return hex.EncodeToString(b) }

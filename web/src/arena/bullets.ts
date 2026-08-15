@@ -18,6 +18,7 @@ interface Bullet {
   color: THREE.Color
   /** 枪口位置,用来算"这一枪打了多远" */
   origin: THREE.Vector3
+  visualOnly: boolean
 }
 
 interface Puff {
@@ -80,6 +81,7 @@ export class Bullets {
         headMul: 2,
         color: new THREE.Color(),
         origin: new THREE.Vector3(),
+        visualOnly: false,
       })
       this.tracerMesh.setColorAt(i, new THREE.Color(0xffffff))
     }
@@ -92,6 +94,15 @@ export class Bullets {
 
   /** 打一发。超出池子上限就顶掉最老的一发,不新建对象。 */
   spawn(origin: THREE.Vector3, dir: THREE.Vector3, weapon: Weapon): void {
+    this.spawnBullet(origin,dir,weapon,false)
+  }
+
+  /** 其他玩家的同步子弹只画轨迹，不在本机重复结算伤害。 */
+  spawnRemote(origin: THREE.Vector3, dir: THREE.Vector3, weapon: Weapon): void {
+    this.spawnBullet(origin,dir,weapon,true)
+  }
+
+  private spawnBullet(origin:THREE.Vector3,dir:THREE.Vector3,weapon:Weapon,visualOnly:boolean):void {
     const b = this.items.find((x) => !x.alive) ?? this.items[0]
     b.alive = true
     b.pos.copy(origin)
@@ -101,6 +112,7 @@ export class Bullets {
     b.damage = weapon.damage
     b.headMul = weapon.headMul
     b.color.set(weapon.tracer)
+    b.visualOnly = visualOnly
   }
 
   update(dt: number, targets: { raycast(a:THREE.Vector3,b:THREE.Vector3):any; apply(bot:any,damage:number,point:THREE.Vector3,head:boolean,from:THREE.Vector3):TargetHit }, onHit: (hit: TargetHit) => void): void {
@@ -122,7 +134,7 @@ export class Bullets {
         b.pos.addScaledVector(b.vel, sdt)
 
         // 打到人:线段判定,别让子弹从人身上穿过去
-        const hit = targets.raycast(this.prev, b.pos)
+        const hit = b.visualOnly ? null : targets.raycast(this.prev, b.pos)
         if (hit) {
           const dmg = b.damage * (hit.head ? b.headMul : 1)
           const result = targets.apply(hit.bot, dmg, hit.point, hit.head, b.origin)
