@@ -100,10 +100,13 @@ export class ArenaWorld {
       this.targets.sync(players,this.online.id)
       for(const p of players){
         if(p.id===this.online.id||p.team===team)continue
-        const seen=this.remoteShotSeq.get(p.id)??0
+        // 第一次见到这个玩家时只记录当前序号，避免把加入战场前的旧弹道重放。
+        if(!this.remoteShotSeq.has(p.id)){this.remoteShotSeq.set(p.id,p.shotSeq);continue}
+        const seen=this.remoteShotSeq.get(p.id)!
         if(p.shotSeq>seen){
           this.remoteShotSeq.set(p.id,p.shotSeq)
-          if(Date.now()-p.shotAt<800&&WEAPONS[p.shotWeapon])this.bullets.spawnRemote(new THREE.Vector3(p.shotX,p.shotY,p.shotZ),new THREE.Vector3(p.shotDX,p.shotDY,p.shotDZ),WEAPONS[p.shotWeapon])
+          // 不能拿客户端时钟和服务器时间比较；移动设备时钟有偏差时会误删所有子弹。
+          if(WEAPONS[p.shotWeapon])this.bullets.spawnRemote(new THREE.Vector3(p.shotX,p.shotY,p.shotZ),new THREE.Vector3(p.shotDX,p.shotDY,p.shotDZ),WEAPONS[p.shotWeapon])
         }
       }
       const me=players.find(p=>p.id===this.online.id)

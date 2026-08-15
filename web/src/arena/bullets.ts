@@ -201,7 +201,9 @@ export class Bullets {
         const len = Math.max(1.2, b.vel.length() * dt * 2.2)
         this.dir.copy(b.vel).normalize()
         this.q.setFromUnitVectors(this.up, this.dir)
-        this.m.compose(b.pos, this.q, this.scale.set(1, 1, len))
+        // 对手子弹在手机小屏幕上加粗并拉长；只改变视觉，不改变速度和弹道。
+        const width = b.visualOnly ? 2.4 : 1
+        this.m.compose(b.pos, this.q, this.scale.set(width, width, len * (b.visualOnly ? 1.8 : 1)))
         this.tracerMesh.setColorAt(i, b.color)
       }
       this.tracerMesh.setMatrixAt(i, this.m)
