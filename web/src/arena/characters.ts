@@ -2,15 +2,16 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { clone } from 'three/addons/utils/SkeletonUtils.js'
 
-const MODEL_URL = '/arena/meshy/aurora-walk.glb'
 interface CharacterSource { scene: THREE.Group; clips: THREE.AnimationClip[] }
-let sourcePromise: Promise<CharacterSource> | null = null
+const MODEL_URLS = ['/arena/meshy/aurora-walk.glb','/arena/meshy/ivory-walk.glb'] as const
+const sourcePromises: Array<Promise<CharacterSource>|undefined> = []
 
-function source(): Promise<CharacterSource> {
-  if (!sourcePromise) sourcePromise = new Promise((resolve,reject)=>{
-    new GLTFLoader().load(MODEL_URL,gltf=>resolve({scene:gltf.scene,clips:gltf.animations}),undefined,reject)
+function source(variant:number): Promise<CharacterSource> {
+  const index=Math.abs(variant)%MODEL_URLS.length
+  if (!sourcePromises[index]) sourcePromises[index] = new Promise((resolve,reject)=>{
+    new GLTFLoader().load(MODEL_URLS[index],gltf=>resolve({scene:gltf.scene,clips:gltf.animations}),undefined,reject)
   })
-  return sourcePromise
+  return sourcePromises[index]!
 }
 
 /** Meshy 蒙皮人物实例。模型经过减面、量化和 1024 WebP 贴图压缩，适合移动网页。 */
@@ -43,7 +44,7 @@ export class ArenaCharacter {
     this.addTeamAndWeapons(teamColor)
   }
 
-  static async create(teamColor:number):Promise<ArenaCharacter>{return new ArenaCharacter(await source(),teamColor)}
+  static async create(teamColor:number,variant=0):Promise<ArenaCharacter>{return new ArenaCharacter(await source(variant),teamColor)}
   update(dt:number,moving:boolean,down:boolean):void{if(this.walk)this.walk.paused=!moving||down;this.mixer.update(dt)}
   knockDown():void{this.model.rotation.z=-Math.PI/2;this.model.position.y=.3}
   revive():void{this.model.rotation.z=0;this.model.position.y=0}
@@ -62,8 +63,9 @@ export class ArenaCharacter {
     ring.rotation.x=Math.PI/2;ring.position.y=.04;this.root.add(ring)
     const badge=new THREE.Mesh(new THREE.BoxGeometry(.24,.12,.035),team);badge.position.set(-.25,1.38,-.32);this.root.add(badge)
     this.smg=this.buildGun('smg',dark,team);this.sniper=this.buildGun('sniper',dark,team)
-    this.smg.position.set(.12,1.18,-.55);this.sniper.position.set(.12,1.2,-.7)
-    this.smg.rotation.set(-.08,Math.PI-.34,-.03);this.sniper.rotation.set(-.06,Math.PI-.3,-.02)
+    this.smg.scale.setScalar(.72);this.sniper.scale.setScalar(.68)
+    this.smg.position.set(.04,1.16,-.4);this.sniper.position.set(.04,1.18,-.46)
+    this.smg.rotation.set(-.08,Math.PI-.14,-.03);this.sniper.rotation.set(-.06,Math.PI-.12,-.02)
     this.root.add(this.smg,this.sniper);this.setWeapon('smg')
   }
 

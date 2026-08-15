@@ -121,8 +121,9 @@ export class ArenaHud {
     this.gunEl.textContent = gunName
   }
 
-  setPlayer(team: 'red' | 'blue', hp: number): void {
-    this.teamEl.textContent = team === 'red' ? t('arena.team.redShort') : t('arena.team.blueShort')
+  setPlayer(team: 'red' | 'blue', hp: number, number?: number): void {
+    const name = team === 'red' ? t('arena.team.redShort') : t('arena.team.blueShort')
+    this.teamEl.textContent = number ? `${name} #${number}` : name
     this.teamEl.dataset.team = team
     this.healthEl.textContent = String(hp)
     const bar = this.q('healthbar')

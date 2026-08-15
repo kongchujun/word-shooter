@@ -99,7 +99,7 @@ export class ArenaWorld {
       this.targets.sync(players,this.online.id)
       const me=players.find(p=>p.id===this.online.id)
       if(!me)return
-      this.hud.setPlayer(team,me.hp)
+      this.hud.setPlayer(team,me.hp,me.number)
       if(me.dead&&!this.dead){
         this.dead=true;this.respawnLeft=3;this.player.vel.set(0,0,0);this.input.fire=false;this.input.ads=false
         this.viewModel.root.visible=false;this.hud.setDead(true,3)

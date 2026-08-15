@@ -14,9 +14,18 @@ class RemoteAvatar {
     this.hpFill=new THREE.Mesh(new THREE.PlaneGeometry(1,.085),new THREE.MeshBasicMaterial({color:0xff5f5f,depthTest:false,depthWrite:false}))
     back.renderOrder=20;this.hpFill.renderOrder=21
     this.hpFill.position.z=.006;bar.add(back,this.hpFill);this.group.add(bar)
-    void ArenaCharacter.create(p.team==='red'?0xe85d4c:0x4d8dff).then(c=>{this.character=c;c.setWeapon(p.weapon);this.group.add(c.root)})
+    const badge=makeNumberBadge(p.number,p.team);badge.position.y=2.95;this.group.add(badge)
+    void ArenaCharacter.create(p.team==='red'?0xe85d4c:0x4d8dff,p.number-1).then(c=>{this.character=c;c.setWeapon(p.weapon);this.group.add(c.root)})
   }
   update(dt:number,cameraYaw:number){this.group.position.lerp(this.target,Math.min(1,dt*12));this.group.rotation.y+=(this.yaw-this.group.rotation.y)*Math.min(1,dt*12);this.group.visible=!this.state.dead;this.bar.rotation.y=cameraYaw-this.group.rotation.y;this.character?.setWeapon(this.state.weapon);this.character?.update(dt,this.state.moving,this.state.dead);const hp=Math.max(.001,this.state.hp/100);this.hpFill.scale.x=hp;this.hpFill.position.x=-(1-hp)/2}
+}
+
+function makeNumberBadge(number:number,team:'red'|'blue'):THREE.Sprite{
+  const cv=document.createElement('canvas');cv.width=128;cv.height=128
+  const ctx=cv.getContext('2d')!;ctx.fillStyle=team==='red'?'#c7473b':'#3978d2';ctx.beginPath();ctx.arc(64,64,48,0,Math.PI*2);ctx.fill()
+  ctx.lineWidth=7;ctx.strokeStyle='white';ctx.stroke();ctx.fillStyle='white';ctx.font='bold 58px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(number),64,67)
+  const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace
+  const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false,depthWrite:false}));sprite.scale.set(.52,.52,.52);sprite.renderOrder=30;return sprite
 }
 export class RemotePlayers {
   readonly group=new THREE.Group(); private avatars=new Map<string,RemoteAvatar>(); private a=new THREE.Vector3();private b=new THREE.Vector3();private c=new THREE.Vector3()

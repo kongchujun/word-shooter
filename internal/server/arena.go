@@ -16,6 +16,7 @@ const arenaTTL = 12 * time.Second
 type arenaPlayer struct {
 	ID        string    `json:"id"`
 	Team      string    `json:"team"`
+	Number    int       `json:"number"`
 	X         float64   `json:"x"`
 	Y         float64   `json:"y"`
 	Z         float64   `json:"z"`
@@ -55,6 +56,19 @@ func spawn(team string) float64 {
 	return -79
 }
 func validTeam(v string) bool { return v == "red" || v == "blue" }
+
+func (h *arenaHub) nextNumber() int {
+	used := make(map[int]bool, len(h.players))
+	for _, p := range h.players {
+		used[p.Number] = true
+	}
+	for n := 1; n <= 99; n++ {
+		if !used[n] {
+			return n
+		}
+	}
+	return len(h.players) + 1
+}
 
 func (h *arenaHub) clean(now time.Time) {
 	for id, p := range h.players {
@@ -104,9 +118,9 @@ func (s *Server) arenaJoin(c *gin.Context) {
 		return
 	}
 	now := time.Now()
-	p := &arenaPlayer{ID: token()[:12], Token: token(), Team: in.Team, X: spawn(in.Team), HP: 100, Weapon: "smg", Seen: now}
 	s.arena.mu.Lock()
 	s.arena.clean(now)
+	p := &arenaPlayer{ID: token()[:12], Token: token(), Team: in.Team, Number: s.arena.nextNumber(), X: spawn(in.Team), HP: 100, Weapon: "smg", Seen: now}
 	s.arena.players[p.ID] = p
 	ps := s.arena.snapshot(now)
 	s.arena.mu.Unlock()
